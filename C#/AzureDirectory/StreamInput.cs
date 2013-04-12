@@ -21,20 +21,20 @@ namespace Lucene.Net.Store.Azure
         }
 
         public override bool CanRead { get { return true; } }
-        public override bool CanSeek { get { return true;; } }
+        public override bool CanSeek { get { return true; ; } }
         public override bool CanWrite { get { return false; } }
         public override void Flush() { }
         public override long Length { get { return Input.Length(); } }
 
         public override long Position
         {
-            get { return Input.GetFilePointer(); }
+            get { return Input.FilePointer; }
             set { Input.Seek(value); }
         }
 
         public override int Read(byte[] buffer, int offset, int count)
         {
-            long pos = Input.GetFilePointer();
+            long pos = Input.FilePointer;
             try
             {
                 long len = Input.Length();
@@ -43,23 +43,23 @@ namespace Lucene.Net.Store.Azure
                 Input.ReadBytes(buffer, offset, count);
             }
             catch (Exception) { }
-            return (int)(Input.GetFilePointer() - pos);
+            return (int)(Input.FilePointer - pos);
         }
 
         public override long Seek(long offset, SeekOrigin origin)
         {
-            switch(origin)
+            switch (origin)
             {
                 case SeekOrigin.Begin:
-                    Input.Seek(offset); 
+                    Input.Seek(offset);
                     break;
                 case SeekOrigin.Current:
-                    Input.Seek(Input.GetFilePointer()+offset);
+                    Input.Seek(Input.FilePointer + offset);
                     break;
                 case SeekOrigin.End:
                     throw new System.NotImplementedException();
-             }
-            return Input.GetFilePointer();
+            }
+            return Input.FilePointer;
         }
 
         public override void SetLength(long value)
@@ -79,3 +79,4 @@ namespace Lucene.Net.Store.Azure
         }
     }
 }
+
