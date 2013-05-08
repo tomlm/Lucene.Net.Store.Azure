@@ -44,7 +44,7 @@ namespace Lucene.Net.Store.Azure
                         Debug.Print("IsLocked() : TRUE");
                         return true;
                     }
-                    blob.ReleaseLease(new AccessCondition() { LeaseId = _leaseid });
+                    blob.ReleaseLease(new AccessCondition() { LeaseId = tempLease });
                 }
                 Debug.Print("IsLocked() : {0}", _leaseid);
                 return String.IsNullOrEmpty(_leaseid);
