@@ -30,8 +30,21 @@ namespace TestApp
             // default AzureDirectory stores cache in local temp folder
             CloudStorageAccount cloudStorageAccount = CloudStorageAccount.DevelopmentStorageAccount;
             CloudStorageAccount.TryParse(CloudConfigurationManager.GetSetting("blobStorage"), out cloudStorageAccount);
-            AzureDirectory azureDirectory = new AzureDirectory(cloudStorageAccount, "TestCatalog6");
+            //AzureDirectory azureDirectory = new AzureDirectory(cloudStorageAccount, "TestTest", new RAMDirectory());
+            //AzureDirectory azureDirectory = new AzureDirectory(cloudStorageAccount, "TestTest", FSDirectory.Open(@"c:\test"));
+            AzureDirectory azureDirectory = new AzureDirectory(cloudStorageAccount, "TestTest" /* default is FSDirectory.Open(@"%temp%/AzureDirectory/TestTest"); */ );
             bool findexExists = IndexReader.IndexExists(azureDirectory);
+
+            IndexSearcher searcher;
+            using (new AutoStopWatch("Creating searcher"))
+            {
+                searcher = new IndexSearcher(azureDirectory);
+            }
+            SearchForPhrase(searcher, "dog");
+            SearchForPhrase(searcher, _random.Next(32768).ToString());
+            SearchForPhrase(searcher, _random.Next(32768).ToString());
+            Console.WriteLine("Hit a key to add 10000 docs");
+            Console.ReadKey();
 
             IndexWriter indexWriter = null;
             while (indexWriter == null)
@@ -42,9 +55,8 @@ namespace TestApp
                 }
                 catch (LockObtainFailedException)
                 {
-                    Console.WriteLine("Lock is taken, Hit 'Y' to clear the lock, or anything else to try again");
-                    if (Console.ReadLine().ToLower().Trim() == "y")
-                        azureDirectory.ClearLock("write.lock");
+                    Console.WriteLine("Lock is taken, waiting for timeout...");
+                    Thread.Sleep(1000);
                 }
             };
             Console.WriteLine("IndexWriter lock obtained, this process has exclusive write access to index");
@@ -64,9 +76,11 @@ namespace TestApp
                 indexWriter.AddDocument(doc);
             }
             Console.WriteLine("Total docs is {0}", indexWriter.NumDocs());
-            indexWriter.Dispose();
+            
+            Console.WriteLine("done");
+            Console.WriteLine("Hit Key to search again");
+            Console.ReadKey();
 
-            IndexSearcher searcher;
             using (new AutoStopWatch("Creating searcher"))
             {
                 searcher = new IndexSearcher(azureDirectory);
@@ -74,7 +88,13 @@ namespace TestApp
             SearchForPhrase(searcher, "dog");
             SearchForPhrase(searcher, _random.Next(32768).ToString());
             SearchForPhrase(searcher, _random.Next(32768).ToString());
-            Console.Read();
+            Console.WriteLine("Hit a key to dispose and exit");
+            Console.ReadKey();
+
+            Console.Write("Flushing and disposing writer...");
+            // Potentially Expensive: this ensures that all writes are commited to blob storage
+            indexWriter.Flush(true, true, true);
+            indexWriter.Dispose();
         }
 
 

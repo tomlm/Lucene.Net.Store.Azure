@@ -27,6 +27,7 @@ namespace Lucene.Net.Store.Azure
         private Mutex _fileMutex;
 
         public Lucene.Net.Store.Directory CacheDirectory { get { return _azureDirectory.CacheDirectory; } }
+        private static long ticks1970 = new DateTime(1970, 1, 1, 0, 0, 0).Ticks / TimeSpan.TicksPerMillisecond;
 
         public AzureIndexInput(AzureDirectory azuredirectory, ICloudBlob blob)
         {
@@ -59,7 +60,12 @@ namespace Lucene.Net.Store.Azure
                     long longLastModified = 0;
                     DateTime blobLastModifiedUTC = blob.Properties.LastModified.Value.UtcDateTime;
                     if (long.TryParse(blob.Metadata["CachedLastModified"], out longLastModified))
+                    {
+                        // normalize RAMDirectory and FSDirectory times
+                        if (longLastModified > ticks1970)
+                            longLastModified -= ticks1970;
                         blobLastModifiedUTC = new DateTime(longLastModified).ToUniversalTime();
+                    }
 
                     if (cachedLength != blobLength)
                         fFileNeeded = true;
@@ -67,7 +73,14 @@ namespace Lucene.Net.Store.Azure
                     {
                         // there seems to be an error of 1 tick which happens every once in a while 
                         // for now we will say that if they are within 1 tick of each other and same length 
-                        DateTime cachedLastModifiedUTC = new DateTime(CacheDirectory.FileModified(fileName), DateTimeKind.Local).ToUniversalTime();
+
+                        var elapsed = CacheDirectory.FileModified(fileName);
+
+                        // normalize RAMDirectory and FSDirectory times
+                        if (elapsed > ticks1970)
+                            elapsed -= ticks1970;
+
+                        DateTime cachedLastModifiedUTC = new DateTime(elapsed, DateTimeKind.Local).ToUniversalTime();
                         if (cachedLastModifiedUTC != blobLastModifiedUTC)
                         {
                             TimeSpan timeSpan = blobLastModifiedUTC.Subtract(cachedLastModifiedUTC);
