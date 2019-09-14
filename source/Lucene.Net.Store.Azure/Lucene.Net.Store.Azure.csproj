@@ -3,16 +3,19 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>4.8.0-beta001</Version>
+    <Version>4.8.0-beta006</Version>
     <Authors>Tom Laird-McConnell</Authors>
     <Title>Azure blob storage for Lucene.net</Title>
     <Summary>This project allows you to store Lucene Indexes in by Azure BlobStorage.</Summary>
-    <Description>This project allows you to create Lucene Indexes via a AzureDirectory object which uses Azure BlobStorage for persistent storage.  This .NET Standard compliant library for us with .NET Core or .NET Desktop. It uses Lucene.Net 4.8.0.beta0005</Description>
+    <Description>This project allows you to create Lucene Indexes via a AzureDirectory object which uses Azure BlobStorage for persistent storage.  This .NET Standard compliant library for us with .NET Core or .NET Desktop. It uses Lucene.Net 4.8.0.beta0006</Description>
     <PackageLicenseFile></PackageLicenseFile>
     <PackageProjectUrl>https://github.com/tomlm/Lucene.Net.Store.Azure</PackageProjectUrl>
     <RepositoryUrl>https://github.com/tomlm/Lucene.Net.Store.Azure</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MS-PL</PackageLicenseExpression>
+    <AssemblyVersion>4.8.0.6</AssemblyVersion>
+    <FileVersion>4.8.0.6</FileVersion>
+    <PackageReleaseNotes>This is a release with dependency on Lucene.Net 4.8.0.beta 006</PackageReleaseNotes>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -24,9 +27,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Lucene.Net" Version="4.8.0-beta00005" />
-    <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00005" />
-    <PackageReference Include="Microsoft.Azure.Storage.Blob" Version="10.0.3" />
+    <PackageReference Include="Lucene.Net" Version="4.8.0-beta00006" />
+    <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00006" />
+    <PackageReference Include="Microsoft.Azure.Storage.Blob" Version="11.0.1" />
   </ItemGroup>
 
 </Project>
