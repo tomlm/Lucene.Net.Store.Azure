@@ -74,7 +74,7 @@ namespace Lucene.Net.Store.Azure
 
         public override void Close()
         {
-            Input.Close();
+            Input.Dispose();
             base.Close();
         }
     }

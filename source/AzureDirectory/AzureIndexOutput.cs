@@ -85,7 +85,7 @@ namespace Lucene.Net.Store.Azure
                             indexInput.ReadBytes(bytes, 0, (int)bytes.Length);
                             compressor.Write(bytes, 0, (int)bytes.Length);
                         }
-                        indexInput.Close();
+                        indexInput.Dispose();
 
                         // seek back to beginning of comrpessed stream
                         compressedStream.Seek(0, SeekOrigin.Begin);

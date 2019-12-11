@@ -8,11 +8,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{1F4274
 		.nuget\packages.config = .nuget\packages.config
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lucene.Net.Store.Azure", "Lucene.Net.Store.Azure\Lucene.Net.Store.Azure.csproj", "{D091F07C-ADD4-4860-ADBB-DA66819B8BE5}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Lucene.Net.Store.Azure", "Lucene.Net.Store.Azure\Lucene.Net.Store.Azure.csproj", "{D091F07C-ADD4-4860-ADBB-DA66819B8BE5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lucene.Net.Store.Azure.Tests", "Lucene.Net.Store.Azure.Tests\Lucene.Net.Store.Azure.Tests.csproj", "{64E5AA97-4090-4893-9880-9AC465F1FC62}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Lucene.Net.Store.Azure.Tests", "Lucene.Net.Store.Azure.Tests\Lucene.Net.Store.Azure.Tests.csproj", "{64E5AA97-4090-4893-9880-9AC465F1FC62}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AzureDirectory", "AzureDirectory\AzureDirectory.csproj", "{6D8758A7-F910-4BA0-B382-D535CA1FF958}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lucene.Net.Store.Azure.Net45", "AzureDirectory\Lucene.Net.Store.Azure.Net45.csproj", "{6D8758A7-F910-4BA0-B382-D535CA1FF958}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

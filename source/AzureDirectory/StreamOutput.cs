@@ -91,7 +91,7 @@ namespace Lucene.Net.Store.Azure
         public override void Close()
         {
             Output.Flush();
-            Output.Close();
+            Output.Dispose();
             base.Close();
         }
     }
