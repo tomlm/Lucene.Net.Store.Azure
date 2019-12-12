@@ -10,9 +10,9 @@ namespace Lucene.Net.Store.Azure
 {
     public class AzureDirectory : Directory
     {
-        private string _catalog;
-        private string _subDirectory;
         private CloudBlobClient _blobClient;
+        private string containerName;
+        private string subDirectory;
 
         private readonly Dictionary<string, AzureLock> _locks = new Dictionary<string, AzureLock>();
         private LockFactory _lockFactory = new NativeFSLockFactory();
@@ -29,7 +29,7 @@ namespace Lucene.Net.Store.Azure
         /// Create AzureDirectory
         /// </summary>
         /// <param name="storageAccount">staorage account to use</param>
-        /// <param name="catalog">name of catalog (folder in blob storage)</param>
+        /// <param name="catalog">name of catalog (folder in blob storage, can have subfolders like foo/bar)</param>
         /// <remarks>Default local cache is to use file system in user/appdata/AzureDirectory/Catalog</remarks>
         public AzureDirectory(
             CloudStorageAccount storageAccount,
@@ -39,51 +39,34 @@ namespace Lucene.Net.Store.Azure
         }
 
         /// <summary>
-        /// Create AzureDirectory
-        /// </summary>
-        /// <param name="storageAccount">staorage account to use</param>
-        /// <param name="catalog">name of catalog (folder in blob storage)</param>
-        /// <param name="subDirectory">name of subdirectory within the catalog</param>
-        /// <remarks>Default local cache is to use file system in user/appdata/AzureDirectory/Catalog</remarks>
-        public AzureDirectory(
-            CloudStorageAccount storageAccount,
-            string catalog,
-            string subDirectory)
-            : this(storageAccount, catalog, subDirectory, null)
-        {
-        }
-
-        /// <summary>
         /// Create an AzureDirectory
         /// </summary>
         /// <param name="storageAccount">storage account to use</param>
-        /// <param name="catalog">name of catalog (folder in blob storage)</param>
+        /// <param name="catalog">name of catalog (folder in blob storage, can have subfolders like foo/bar)</param>
         /// <param name="cacheDirectory">local Directory object to use for local cache</param>
         public AzureDirectory(
             CloudStorageAccount storageAccount,
             string catalog,
-            string subDirectory,
             Directory cacheDirectory)
         {
             if (storageAccount == null)
                 throw new ArgumentNullException("storageAccount");
 
             if (string.IsNullOrEmpty(catalog))
-                _catalog = "lucene";
+                Name = "lucene";
             else
-                _catalog = catalog.ToLower();
+                Name = catalog.ToLower();
 
-            if (!string.IsNullOrWhiteSpace(subDirectory))
-            {
-                _subDirectory = subDirectory.ToLower();
-            }
+            this.containerName = Name.Split('/').First();
+            this.subDirectory = String.Join("/", Name.Split('/').Skip(1));
 
             _blobClient = storageAccount.CreateCloudBlobClient();
             _initCacheDirectory(cacheDirectory);
         }
 
-
         public CloudBlobContainer BlobContainer { get; private set; }
+
+        public string Name { get; set; }
 
         /// <summary>
         /// If set, this is the directory object to use as the local cache
@@ -106,16 +89,9 @@ namespace Lucene.Net.Store.Azure
         public override string[] ListAll()
         {
             var results = Enumerable.Empty<string>();
-            if (string.IsNullOrWhiteSpace(_subDirectory))
-            {
-                results = from blob in BlobContainer.ListBlobs()
-                          select blob.Uri.AbsolutePath.Substring(blob.Uri.AbsolutePath.LastIndexOf('/') + 1);
-            }
-            else
-            {
-                results = from blob in BlobContainer.ListBlobs().Where(blob => blob.Uri.AbsolutePath.Contains($"/{_subDirectory}/"))
-                          select blob.Uri.AbsolutePath.Substring(blob.Uri.AbsolutePath.LastIndexOf('/') + 1);
-            }
+            var blobs = BlobContainer.GetDirectoryReference(this.subDirectory).ListBlobs().ToList();
+            results = from blob in blobs
+                      select blob.Uri.AbsolutePath.Substring(blob.Uri.AbsolutePath.TrimEnd('/').LastIndexOf('/') + 1);
             return results.ToArray();
         }
 
@@ -126,8 +102,7 @@ namespace Lucene.Net.Store.Azure
             // this always comes from the server
             try
             {
-                var nameDecorated = DecorateName(name);
-                return BlobContainer.GetBlockBlobReference(nameDecorated).Exists();
+                return BlobContainer.GetBlockBlobReference(GetBlobName(name)).Exists();
             }
             catch (Exception)
             {
@@ -138,8 +113,8 @@ namespace Lucene.Net.Store.Azure
         /// <summary>Removes an existing file in the directory. </summary>
         public override void DeleteFile(string name)
         {
-            var nameDecorated = DecorateName(name);
-            var blob = BlobContainer.GetBlockBlobReference(nameDecorated);
+            var blobName = GetBlobName(name);
+            var blob = BlobContainer.GetBlockBlobReference(blobName);
             blob.DeleteIfExists();
         }
 
@@ -148,8 +123,8 @@ namespace Lucene.Net.Store.Azure
         {
             try
             {
-                var nameDecorated = DecorateName(name);
-                var blob = BlobContainer.GetBlockBlobReference(nameDecorated);
+                var blobName = GetBlobName(name);
+                var blob = BlobContainer.GetBlockBlobReference(blobName);
                 blob.FetchAttributes();
                 return blob.Properties.Length;
             }
@@ -176,8 +151,8 @@ namespace Lucene.Net.Store.Azure
             // TODO: Figure out how IOContext comes into play here. So far it doesn't -- Aviad
             try
             {
-                var nameDecorated = DecorateName(name);
-                var blob = BlobContainer.GetBlockBlobReference(nameDecorated);
+                var blobName = GetBlobName(name);
+                var blob = BlobContainer.GetBlockBlobReference(blobName);
                 blob.FetchAttributes();
                 return new AzureIndexInput(this, name, blob);
             }
@@ -231,8 +206,8 @@ namespace Lucene.Net.Store.Azure
         public override IndexOutput CreateOutput(string name, IOContext context)
         {
             // TODO: Figure out how IOContext comes into play here. So far it doesn't -- Aviad
-            var decoratedName = DecorateName(name);
-            var blob = BlobContainer.GetBlockBlobReference(decoratedName);
+            var blobName = GetBlobName(name);
+            var blob = BlobContainer.GetBlockBlobReference(blobName);
             var indexOutput = new AzureIndexOutput(this, name, blob);
             _nameCache[name] = indexOutput;
             return indexOutput;
@@ -241,13 +216,12 @@ namespace Lucene.Net.Store.Azure
 
         #region internal methods
 
-        private string DecorateName(string name)
+        public string GetBlobName(string name)
         {
-            if (!string.IsNullOrWhiteSpace(_subDirectory))
+            if (this.subDirectory.Length > 1)
             {
-                return $"{ _subDirectory}/{name}";
+                return $"{subDirectory}/{name}";
             }
-
             return name;
         }
 
@@ -265,11 +239,7 @@ namespace Lucene.Net.Store.Azure
                 if (!azureDir.Exists)
                     azureDir.Create();
 
-                string catalogPath = System.IO.Path.Combine(cachePath, _catalog);
-                if (!string.IsNullOrWhiteSpace(_subDirectory))
-                {
-                    catalogPath = System.IO.Path.Combine(cachePath, _catalog, _subDirectory);
-                }
+                string catalogPath = System.IO.Path.Combine(cachePath, this.Name);
 
                 System.IO.DirectoryInfo catalogDir = new System.IO.DirectoryInfo(catalogPath);
                 if (!catalogDir.Exists)
@@ -283,7 +253,7 @@ namespace Lucene.Net.Store.Azure
 
         public void CreateContainer()
         {
-            this.BlobContainer = _blobClient.GetContainerReference(_catalog);
+            this.BlobContainer = _blobClient.GetContainerReference(this.containerName);
             this.BlobContainer.CreateIfNotExists();
         }
 
@@ -296,8 +266,6 @@ namespace Lucene.Net.Store.Azure
         {
             return new StreamOutput(this.CacheDirectory.CreateOutput(name, IOContext.DEFAULT));
         }
-
-
         #endregion
     }
 }

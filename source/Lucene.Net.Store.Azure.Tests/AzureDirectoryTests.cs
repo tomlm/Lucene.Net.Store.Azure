@@ -41,27 +41,8 @@ namespace Lucene.Net.Store.Azure.Tests
                 Lucene.Net.Util.LuceneVersion.LUCENE_48,
                 new StandardAnalyzer(Lucene.Net.Util.LuceneVersion.LUCENE_48));
 
-            int dog = 0, cat = 0, car = 0;
+            var (dog, cat, car) = InitializeCatalog(azureDirectory, 1000);
 
-            using (var indexWriter = new IndexWriter(azureDirectory, indexWriterConfig))
-            {
-
-                for (var iDoc = 0; iDoc < 1000; iDoc++)
-                {
-                    var bodyText = GeneratePhrase(40);
-                    var doc = new Document {
-                        new TextField("id", DateTime.Now.ToFileTimeUtc() + "-" + iDoc, Field.Store.YES),
-                        new TextField("Title", GeneratePhrase(10), Field.Store.YES),
-                        new TextField("Body", bodyText, Field.Store.YES)
-                    };
-                    dog += bodyText.Contains(" dog ") ? 1 : 0;
-                    cat += bodyText.Contains(" cat ") ? 1 : 0;
-                    car += bodyText.Contains(" car ") ? 1 : 0;
-                    indexWriter.AddDocument(doc);
-                }
-
-                Console.WriteLine("Total docs is {0}, {1} dog, {2} cat, {3} car", indexWriter.NumDocs, dog, cat, car);
-            }
             try
             {
 
@@ -102,18 +83,57 @@ namespace Lucene.Net.Store.Azure.Tests
             var container = blobClient.GetContainerReference(containerName);
             container.DeleteIfExists();
 
-            var azureDirectory = new AzureDirectory(cloudStorageAccount, containerName, "shard1");
+            var azureDirectory1 = new AzureDirectory(cloudStorageAccount, $"{containerName}/shard1");
+            var (dog, cat, car) = InitializeCatalog(azureDirectory1, 1000);
+            var azureDirectory2 = new AzureDirectory(cloudStorageAccount, $"{containerName}/shard2");
+            var (dog2, cat2, car2) = InitializeCatalog(azureDirectory2, 500);
 
+            ValidateDirectory(azureDirectory1, dog, cat, car);
+            ValidateDirectory(azureDirectory2, dog2, cat2, car2);
+
+            // delete all azureDirectory1 blobs
+            foreach (string file in azureDirectory1.ListAll())
+            {
+                azureDirectory1.DeleteFile(file);
+            }
+
+            ValidateDirectory(azureDirectory2, dog2, cat2, car2);
+
+            foreach (string file in azureDirectory2.ListAll())
+            {
+                azureDirectory2.DeleteFile(file);
+            }
+        }
+
+        private static void ValidateDirectory(AzureDirectory azureDirectory2, Int32 dog2, Int32 cat2, Int32 car2)
+        {
+            var ireader = DirectoryReader.Open(azureDirectory2);
+            for (var i = 0; i < 100; i++)
+            {
+                var searcher = new IndexSearcher(ireader);
+                var searchForPhrase = SearchForPhrase(searcher, "dog");
+                Assert.AreEqual(dog2, searchForPhrase);
+                searchForPhrase = SearchForPhrase(searcher, "cat");
+                Assert.AreEqual(cat2, searchForPhrase);
+                searchForPhrase = SearchForPhrase(searcher, "car");
+                Assert.AreEqual(car2, searchForPhrase);
+            }
+            Console.WriteLine("Tests passsed");
+        }
+
+        private static (int dog, int cat, int car) InitializeCatalog(AzureDirectory azureDirectory, int docs)
+        {
             var indexWriterConfig = new IndexWriterConfig(
                 Lucene.Net.Util.LuceneVersion.LUCENE_48,
                 new StandardAnalyzer(Lucene.Net.Util.LuceneVersion.LUCENE_48));
 
-            int dog = 0, cat = 0, car = 0;
-
+            var dog = 0;
+            var cat = 0;
+            var car = 0;
             using (var indexWriter = new IndexWriter(azureDirectory, indexWriterConfig))
             {
 
-                for (var iDoc = 0; iDoc < 1000; iDoc++)
+                for (var iDoc = 0; iDoc < docs; iDoc++)
                 {
                     var bodyText = GeneratePhrase(40);
                     var doc = new Document {
@@ -129,34 +149,9 @@ namespace Lucene.Net.Store.Azure.Tests
 
                 Console.WriteLine("Total docs is {0}, {1} dog, {2} cat, {3} car", indexWriter.NumDocs, dog, cat, car);
             }
-            try
-            {
 
-                var ireader = DirectoryReader.Open(azureDirectory);
-                for (var i = 0; i < 100; i++)
-                {
-                    var searcher = new IndexSearcher(ireader);
-                    var searchForPhrase = SearchForPhrase(searcher, "dog");
-                    Assert.AreEqual(dog, searchForPhrase);
-                    searchForPhrase = SearchForPhrase(searcher, "cat");
-                    Assert.AreEqual(cat, searchForPhrase);
-                    searchForPhrase = SearchForPhrase(searcher, "car");
-                    Assert.AreEqual(car, searchForPhrase);
-                }
-                Console.WriteLine("Tests passsed");
-            }
-            catch (Exception x)
-            {
-                Console.WriteLine("Tests failed:\n{0}", x);
-            }
-            finally
-            {
-                // check the container exists, and delete it
-                Assert.IsTrue(container.Exists()); // check the container exists
-                container.Delete();
-            }
+            return (dog, cat, car);
         }
-
 
         private static int SearchForPhrase(IndexSearcher searcher, string phrase)
         {

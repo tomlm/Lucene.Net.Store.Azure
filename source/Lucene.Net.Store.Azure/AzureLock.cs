@@ -25,7 +25,7 @@ namespace Lucene.Net.Store.Azure
 
         public AzureLock(string lockFile, AzureDirectory directory)
         {
-            _lockFile = lockFile;
+            _lockFile = directory.GetBlobName(lockFile);
             _azureDirectory = directory;
         }
 
@@ -35,7 +35,7 @@ namespace Lucene.Net.Store.Azure
             var blob = _azureDirectory.BlobContainer.GetBlobReferenceFromServer(_lockFile);
             try
             {
-                Debug.Print("IsLockeD() : {0}", _leaseid);
+                Debug.WriteLine($"{_azureDirectory.Name} IsLocked() : {_leaseid}");
                 if (String.IsNullOrEmpty(_leaseid))
                 {
                     var tempLease = blob.AcquireLease(TimeSpan.FromSeconds(60), _leaseid);
@@ -46,7 +46,7 @@ namespace Lucene.Net.Store.Azure
                     }
                     blob.ReleaseLease(new AccessCondition() { LeaseId = tempLease });
                 }
-                Debug.Print("IsLocked() : {0}", _leaseid);
+                Debug.Print($"{_azureDirectory.Name} IsLocked() : {_leaseid}");
                 return String.IsNullOrEmpty(_leaseid);
             }
             catch (StorageException webErr)
@@ -68,11 +68,11 @@ namespace Lucene.Net.Store.Azure
             var blob = _azureDirectory.BlobContainer.GetBlockBlobReference(_lockFile);
             try
             {
-                Debug.Print("AzureLock:Obtain({0}) : {1}", _lockFile, _leaseid);
+                Debug.WriteLine($"{_azureDirectory.Name} AzureLock:Obtain({_lockFile}) : {_leaseid}");
                 if (String.IsNullOrEmpty(_leaseid))
                 {
                     _leaseid = blob.AcquireLease(TimeSpan.FromSeconds(60), _leaseid);
-                    Debug.Print("AzureLock:Obtain({0}): AcquireLease : {1}", _lockFile, _leaseid);
+                    Debug.WriteLine($"{_azureDirectory.Name} AzureLock:Obtain({_lockFile}): AcquireLease : {_leaseid}");
 
                     // keep the lease alive by renewing every 30 seconds
                     long interval = (long)TimeSpan.FromSeconds(30).TotalMilliseconds;
@@ -131,7 +131,7 @@ namespace Lucene.Net.Store.Azure
 
         public override System.String ToString()
         {
-            return String.Format("AzureLock@{0}.{1}", _lockFile, _leaseid);
+            return $"{_azureDirectory.Name} AzureLock@{_lockFile}.{_leaseid}";
         }
 
         private bool _handleWebException(ICloudBlob blob, StorageException err)
@@ -152,7 +152,7 @@ namespace Lucene.Net.Store.Azure
 
         protected override void Dispose(Boolean disposing)
         {
-            Debug.Print("AzureLock:Release({0}) {1}", _lockFile, _leaseid);
+            Debug.WriteLine($"{_azureDirectory.Name} AzureLock:Release({_lockFile}) {_leaseid}");
             if (!String.IsNullOrEmpty(_leaseid))
             {
                 var blob = _azureDirectory.BlobContainer.GetBlockBlobReference(_lockFile);

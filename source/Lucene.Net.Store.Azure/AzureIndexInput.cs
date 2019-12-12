@@ -25,14 +25,14 @@ namespace Lucene.Net.Store.Azure
             : base(name)
         {
             this._name = name;
+            this._azureDirectory = azureDirectory;
 #if FULLDEBUG
-            Debug.WriteLine(String.Format("opening {0} ", name));
+            Debug.WriteLine($"{_azureDirectory.Name} opening {name} ");
 #endif
             _fileMutex = BlobMutexManager.GrabMutex(name);
             _fileMutex.WaitOne();
             try
             {
-                _azureDirectory = azureDirectory;
                 _blobContainer = azureDirectory.BlobContainer;
                 _blob = blob;
 
@@ -59,11 +59,11 @@ namespace Lucene.Net.Store.Azure
                         _blob.DownloadToStream(fileStream);
                         fileStream.Flush();
 
-                        Debug.WriteLine(string.Format("GET {0} RETREIVED {1} bytes", _name, fileStream.Length));
+                        Debug.WriteLine($"{_azureDirectory.Name} GET {_name} RETREIVED {fileStream.Length} bytes");
                     }
                 }
 #if FULLDEBUG
-                Debug.WriteLine(String.Format("Using cached file for {0}", name));
+                Debug.WriteLine($"{_azureDirectory.Name} Using cached file for {name}");
 #endif
                 // and open it as our input, this is now available forevers until new file comes along
                 _indexInput = CacheDirectory.OpenInput(name, IOContext.DEFAULT);
@@ -105,7 +105,7 @@ namespace Lucene.Net.Store.Azure
             try
             {
 #if FULLDEBUG
-                Debug.WriteLine(String.Format("CLOSED READSTREAM local {0}", _name));
+                Debug.WriteLine($"{_azureDirectory.Name} CLOSED READSTREAM local {_name}");
 #endif
                 _indexInput.Dispose();
                 _indexInput = null;

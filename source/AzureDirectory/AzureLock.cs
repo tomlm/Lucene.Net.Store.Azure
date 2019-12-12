@@ -35,18 +35,18 @@ namespace Lucene.Net.Store.Azure
             var blob = _azureDirectory.BlobContainer.GetBlobReferenceFromServer(_lockFile);
             try
             {
-                Debug.Print("IsLockeD() : {0}", _leaseid);
+                Debug.WriteLine("IsLockeD() : {0}", _leaseid);
                 if (String.IsNullOrEmpty(_leaseid))
                 {
                     var tempLease = blob.AcquireLease(TimeSpan.FromSeconds(60), _leaseid);
                     if (String.IsNullOrEmpty(tempLease))
                     {
-                        Debug.Print("IsLocked() : TRUE");
+                        Debug.WriteLine("IsLocked() : TRUE");
                         return true;
                     }
                     blob.ReleaseLease(new AccessCondition() { LeaseId = tempLease });
                 }
-                Debug.Print("IsLocked() : {0}", _leaseid);
+                Debug.WriteLine("IsLocked() : {0}", _leaseid);
                 return String.IsNullOrEmpty(_leaseid);
             }
             catch (StorageException webErr)
@@ -68,11 +68,11 @@ namespace Lucene.Net.Store.Azure
             var blob = _azureDirectory.BlobContainer.GetBlockBlobReference(_lockFile);
             try
             {
-                Debug.Print("AzureLock:Obtain({0}) : {1}", _lockFile, _leaseid);
+                Debug.WriteLine("AzureLock:Obtain({0}) : {1}", _lockFile, _leaseid);
                 if (String.IsNullOrEmpty(_leaseid))
                 {
                     _leaseid = blob.AcquireLease(TimeSpan.FromSeconds(60), _leaseid);
-                    Debug.Print("AzureLock:Obtain({0}): AcquireLease : {1}", _lockFile, _leaseid);
+                    Debug.WriteLine("AzureLock:Obtain({0}): AcquireLease : {1}", _lockFile, _leaseid);
 
                     // keep the lease alive by renewing every 30 seconds
                     long interval = (long)TimeSpan.FromSeconds(30).TotalMilliseconds;
@@ -83,7 +83,7 @@ namespace Lucene.Net.Store.Azure
                             AzureLock al = (AzureLock)obj;
                             al.Renew();
                         }
-                        catch (Exception err) { Debug.Print(err.ToString()); }
+                        catch (Exception err) { Debug.WriteLine(err.ToString()); }
                     }, this, interval, interval);
                 }
                 return !String.IsNullOrEmpty(_leaseid);
@@ -107,7 +107,7 @@ namespace Lucene.Net.Store.Azure
         {
             if (!String.IsNullOrEmpty(_leaseid))
             {
-                Debug.Print("AzureLock:Renew({0} : {1}", _lockFile, _leaseid);
+                Debug.WriteLine("AzureLock:Renew({0} : {1}", _lockFile, _leaseid);
                 var blob = _azureDirectory.BlobContainer.GetBlockBlobReference(_lockFile);
                 blob.RenewLease(new AccessCondition { LeaseId = _leaseid });
             }
@@ -115,7 +115,7 @@ namespace Lucene.Net.Store.Azure
 
         public override void Release()
         {
-            Debug.Print("AzureLock:Release({0}) {1}", _lockFile, _leaseid);
+            Debug.WriteLine("AzureLock:Release({0}) {1}", _lockFile, _leaseid);
             if (!String.IsNullOrEmpty(_leaseid))
             {
                 var blob = _azureDirectory.BlobContainer.GetBlockBlobReference(_lockFile);
@@ -132,7 +132,7 @@ namespace Lucene.Net.Store.Azure
 
         public void BreakLock()
         {
-            Debug.Print("AzureLock:BreakLock({0}) {1}", _lockFile, _leaseid);
+            Debug.WriteLine("AzureLock:BreakLock({0}) {1}", _lockFile, _leaseid);
             var blob = _azureDirectory.BlobContainer.GetBlockBlobReference(_lockFile);
             try
             {

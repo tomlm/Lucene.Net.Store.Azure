@@ -70,11 +70,11 @@ namespace Lucene.Net.Store.Azure
                     // set the metadata with the original index file properties
                     _blob.SetMetadata();
 
-                    Debug.WriteLine(string.Format("PUT {1} bytes to {0} in cloud", _name, blobStream.Length));
+                    Debug.WriteLine($"{_azureDirectory.Name} PUT {_name} bytes to {blobStream.Length} in cloud");
                 }
 
 #if FULLDEBUG
-                Debug.WriteLine(string.Format("CLOSED WRITESTREAM {0}", _name));
+                Debug.WriteLine($"{_azureDirectory.Name} CLOSED WRITESTREAM {_name}");
 #endif
                 // clean up
                 _indexOutput = null;
