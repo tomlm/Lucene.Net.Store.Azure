@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Text;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Documents;
@@ -57,11 +58,11 @@ namespace Lucene.Net.Store.Azure.Tests
                     searchForPhrase = SearchForPhrase(searcher, "car");
                     Assert.AreEqual(car, searchForPhrase);
                 }
-                Console.WriteLine("Tests passsed");
+                Trace.TraceInformation("Tests passsed");
             }
             catch (Exception x)
             {
-                Console.WriteLine("Tests failed:\n{0}", x);
+                Trace.TraceInformation("Tests failed:\n{0}", x);
             }
             finally
             {
@@ -118,7 +119,7 @@ namespace Lucene.Net.Store.Azure.Tests
                 searchForPhrase = SearchForPhrase(searcher, "car");
                 Assert.AreEqual(car2, searchForPhrase);
             }
-            Console.WriteLine("Tests passsed");
+            Trace.TraceInformation("Tests passsed");
         }
 
         private static (int dog, int cat, int car) InitializeCatalog(AzureDirectory azureDirectory, int docs)
@@ -147,7 +148,7 @@ namespace Lucene.Net.Store.Azure.Tests
                     indexWriter.AddDocument(doc);
                 }
 
-                Console.WriteLine("Total docs is {0}, {1} dog, {2} cat, {3} car", indexWriter.NumDocs, dog, cat, car);
+                Trace.TraceInformation("Total docs is {0}, {1} dog, {2} cat, {3} car", indexWriter.NumDocs, dog, cat, car);
             }
 
             return (dog, cat, car);
