@@ -173,32 +173,29 @@ As noted each catalog can only be updated by one process at a time, so it makes 
 
 On the search side, you can have a search WebRole which simply creates an AzureDirectory with a RAMDirectory pointed to the blob storage the indexing role is maintaining. As appropriate (say once a minute) the searcher webrole would create a new IndexSearcher object around the index, and any changes will automatically be synced into the cache directory on the searcher webRole.
 
-To scale your search engine you can simply increase the instance count of the searcher webrole to handle the load.
- 
-# Version History
-## Version 1.0.5
-* Replaced existing of blob lock file with blob leases to prevent orphaned lock files from happening
+It is important to understand that you can have as many IndexSearchers bound to a single  catalog as you want, so you can scale our your search load to as many machines as you want.  Every time you create a new IndexSearcher you will be bound to a snapshot of the catalog at that time and then you can serve searches against for as long as you want, until you want to pick up the new version of the catalog.  
+For most uses this is sufficient, because write operations much more rare than read (search) operations.  You might do a billion search operations before you have to add new content to your index.
 
-## Version 1.0.4
-Replaced mutx with BlobMutexManager to solve local mutex permissions
-Thanks to Andy Hitchman for the bug fixes
+If you are in a situation where you need higher WRITE throughput then a single machine can do, then you can scale out your indexing system by create **multiple catalogs**, each with their own IndexWriter.
 
-## Version 1.0.3
-* Added a call to persist the CachedLength and CachedLastModified metadata properties to the blob (not included in the content upload). 
-* AzureDirectory.FileLength was using the actual blob length rather than the CachedLength property. The latest version of lucene checks the length after closing an index to verify that its correct and was throwing an exception for compressed blobs. 
-* Non-compressed blobs were not being uploaded 
-* Updated the AzureDirectory constructor to use a CloudStorageAccount rather than the StorageCredentialsAccountAndKey so its possible to use the Development store for testing 
-works with Lucene.NET 2.9.2 
-** thanks to Joel Fillmore for the bug fixes**
+You don't have to create a single catalog because Lucene allows you to simply combine searchers bound to seperate catalogs together, each bound to their underlying catalog by using the MultiSearcher class.  Esssentially ```MultiSearcher(IndexSearcher(Catalog1), IndexSearcher(Catalog2), IndexSearcher(Catalog3))``` will create a single search view over searchers backe by multiple catalogs ```Catalog1, Catalog2, Catalog3```.
 
-## Version 1.0.2
-* updated to use Azure SDK 1.2 
+Something like this:
+```
+IndexMachine1 =>IndexWriter(Catalog1)
+IndexMachine2 =>IndexWriter(Catalog1)
+...
+IndexMachineM =>IndexWriter(CatalogM)
 
-## Version 1.0.1
-* rewritten to use V1.1 of Azure SDK and the azure storage client 
-* released to MSDN Code Gallery under the MS-PL license. 
+SearchMachine1 => MultiSearcher(IndexSearcher(Catalog1),IndexSearcher(Catalog2),...IndexSearcher(CatalogM))
+SearchMachine2 => MultiSearcher(IndexSearcher(Catalog1),IndexSearcher(Catalog2),...IndexSearcher(CatalogM))
+.
+.
+.
+SearchMachineN => MultiSearcher(IndexSearcher(Catalog1),IndexSearcher(Catalog2),... IndexSearcher(CatalogM))
+```
 
-## Version 1.0
-* Initial release- written for V1.0 CTP of Azure using the sample storage lib 
-* Released under restrictive MSR license on http://research.microsoft.com 
+Effectively you can scale this out to MxN to build a enormous highly performance search engine.
+* Scale instances of IndexMachines/Catalogs to be able to index at the rate you need
+* Scale instances of SearchMachines to be able to handle the search volume you need.
  
