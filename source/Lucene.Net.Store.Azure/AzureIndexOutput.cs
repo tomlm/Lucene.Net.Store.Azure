@@ -1,11 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Threading;
-using Lucene.Net.Index;
-using Lucene.Net.Store;
-using Lucene.Net.Support;
 using Microsoft.Azure.Storage.Blob;
 
 namespace Lucene.Net.Store.Azure
@@ -21,7 +16,6 @@ namespace Lucene.Net.Store.Azure
         private IndexOutput _indexOutput;
         private Mutex _fileMutex;
         private ICloudBlob _blob;
-        private readonly CRC32 _crc;
 
         public AzureIndexOutput(AzureDirectory azureDirectory, string name, CloudBlockBlob blob)
         {
@@ -41,7 +35,6 @@ namespace Lucene.Net.Store.Azure
             {
                 _fileMutex.ReleaseMutex();
             }
-            _crc = new CRC32();
         }
 
         public Lucene.Net.Store.Directory CacheDirectory { get { return _azureDirectory.CacheDirectory; } }
@@ -88,30 +81,21 @@ namespace Lucene.Net.Store.Azure
             }
         }
 
-        public override long Length
-        {
-            get
-            {
-                return _indexOutput.Length;
-            }
-        }
+        public override long Length => _indexOutput.Length;
 
         public override void WriteByte(byte b)
         {
             _indexOutput.WriteByte(b);
-            _crc.Update(new byte[] { b }, 0, 1);
         }
 
         public override void WriteBytes(byte[] b, int length)
         {
             _indexOutput.WriteBytes(b, length);
-            _crc.Update(b, 0, length);
         }
 
         public override void WriteBytes(byte[] b, int offset, int length)
         {
             _indexOutput.WriteBytes(b, offset, length);
-            _crc.Update(b, offset, length);
         }
 
         public override long GetFilePointer()
@@ -124,6 +108,6 @@ namespace Lucene.Net.Store.Azure
             //_indexOutput.Seek(pos);
         }
 
-        public override long Checksum => _crc.Value;
+        public override long Checksum => _indexOutput.Checksum;
     }
 }

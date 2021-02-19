@@ -3,19 +3,19 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>4.8.0-beta007</Version>
+    <Version>4.8.0-beta0011</Version>
     <Authors>Tom Laird-McConnell</Authors>
     <Title>Azure blob storage for Lucene.net</Title>
     <Summary>This project allows you to store Lucene Indexes in by Azure BlobStorage.</Summary>
-    <Description>This project allows you to create Lucene Indexes via a AzureDirectory object which uses Azure BlobStorage for persistent storage.  This .NET Standard compliant library for us with .NET Core or .NET Desktop. It uses Lucene.Net 4.8.0.beta0007</Description>
+    <Description>This project allows you to create Lucene Indexes via a AzureDirectory object which uses Azure BlobStorage for persistent storage.  This .NET Standard compliant library for us with .NET Core or .NET Desktop. It uses Lucene.Net 4.8.0.beta00011</Description>
     <PackageLicenseFile></PackageLicenseFile>
     <PackageProjectUrl>https://github.com/tomlm/Lucene.Net.Store.Azure</PackageProjectUrl>
     <RepositoryUrl>https://github.com/tomlm/Lucene.Net.Store.Azure</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MS-PL</PackageLicenseExpression>
-    <AssemblyVersion>4.8.0.9</AssemblyVersion>
-    <FileVersion>4.8.0.9</FileVersion>
-    <PackageReleaseNotes>This is a release with dependency on Lucene.Net 4.8.0.beta 007</PackageReleaseNotes>
+    <AssemblyVersion>4.8.0.10</AssemblyVersion>
+    <FileVersion>4.8.0.10</FileVersion>
+    <PackageReleaseNotes>This is a release with dependency on Lucene.Net 4.8.0.beta 0011</PackageReleaseNotes>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -27,8 +27,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Lucene.Net" Version="4.8.0-beta00007" />
-    <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00007" />
+    <PackageReference Include="Lucene.Net" Version="4.8.0-beta00011" />
+    <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00011" />
     <PackageReference Include="Microsoft.Azure.Storage.Blob" Version="11.1.2" />
   </ItemGroup>
 
