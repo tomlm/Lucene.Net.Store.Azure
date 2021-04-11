@@ -1,12 +1,11 @@
 using System;
 using System.Diagnostics;
 using System.Text;
+using Azure.Storage.Blobs;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
 using Lucene.Net.Search;
-using Microsoft.Azure.Storage;
-using Microsoft.Azure.Storage.Blob;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lucene.Net.Store.Azure.Tests
@@ -28,15 +27,12 @@ namespace Lucene.Net.Store.Azure.Tests
         {
 
             var connectionString = _connectionString ?? "UseDevelopmentStorage=true";
-
-            var cloudStorageAccount = CloudStorageAccount.Parse(connectionString);
-
             const string containerName = "testcatalog";
-            var blobClient = cloudStorageAccount.CreateCloudBlobClient();
-            var container = blobClient.GetContainerReference(containerName);
+            var blobClient = new BlobServiceClient(connectionString);
+            var container = blobClient.GetBlobContainerClient(containerName);
             container.DeleteIfExists();
 
-            var azureDirectory = new AzureDirectory(cloudStorageAccount, containerName);
+            var azureDirectory = new AzureDirectory(connectionString, containerName);
 
             var indexWriterConfig = new IndexWriterConfig(
                 Lucene.Net.Util.LuceneVersion.LUCENE_48,
@@ -76,17 +72,14 @@ namespace Lucene.Net.Store.Azure.Tests
         public void TestReadAndWriteWithSubDirectory()
         {
             var connectionString = _connectionString ?? "UseDevelopmentStorage=true";
-
-            var cloudStorageAccount = CloudStorageAccount.Parse(connectionString);
-
             const string containerName = "testcatalogwithshards";
-            var blobClient = cloudStorageAccount.CreateCloudBlobClient();
-            var container = blobClient.GetContainerReference(containerName);
+            var blobClient = new BlobServiceClient(connectionString);
+            var container = blobClient.GetBlobContainerClient(containerName);
             container.DeleteIfExists();
 
-            var azureDirectory1 = new AzureDirectory(cloudStorageAccount, $"{containerName}/shard1");
+            var azureDirectory1 = new AzureDirectory(connectionString, $"{containerName}/shard1");
             var (dog, cat, car) = InitializeCatalog(azureDirectory1, 1000);
-            var azureDirectory2 = new AzureDirectory(cloudStorageAccount, $"{containerName}/shard2");
+            var azureDirectory2 = new AzureDirectory(connectionString, $"{containerName}/shard2");
             var (dog2, cat2, car2) = InitializeCatalog(azureDirectory2, 500);
 
             ValidateDirectory(azureDirectory1, dog, cat, car);
