@@ -1,10 +1,8 @@
 ﻿//    License: Microsoft Public License (Ms-PL) 
+using Azure.Storage.Blobs;
 using System;
 using System.Diagnostics;
-using System.IO;
 using System.Threading;
-using Lucene.Net.Store;
-using Microsoft.Azure.Storage.Blob;
 
 
 namespace Lucene.Net.Store.Azure
@@ -16,12 +14,12 @@ namespace Lucene.Net.Store.Azure
     {
         private string _name;
         private AzureDirectory _azureDirectory;
-        private CloudBlobContainer _blobContainer;
-        private CloudBlob _blob;
+        private BlobContainerClient _blobContainer;
+        private BlobClient _blob;
         private IndexInput _indexInput;
         private Mutex _fileMutex;
-
-        public AzureIndexInput(AzureDirectory azureDirectory, string name, CloudBlob blob)
+        
+        public AzureIndexInput(AzureDirectory azureDirectory, string name, BlobClient blob)
             : base(name)
         {
             this._name = name;
@@ -44,7 +42,8 @@ namespace Lucene.Net.Store.Azure
                 else
                 {
                     long cachedLength = CacheDirectory.FileLength(name);
-                    long blobLength = blob.Properties.Length;
+                    var properties = blob.GetProperties();
+                    long blobLength = properties.Value?.ContentLength ?? 0;
                     if (cachedLength != blobLength)
                         fileNeeded = true;
                 }
@@ -56,7 +55,7 @@ namespace Lucene.Net.Store.Azure
                     using (StreamOutput fileStream = _azureDirectory.CreateCachedOutputAsStream(name))
                     {
                         // get the blob
-                        _blob.DownloadToStream(fileStream);
+                        _blob.DownloadTo(fileStream);
                         fileStream.Flush();
 
                         Debug.WriteLine($"{_azureDirectory.Name} GET {_name} RETREIVED {fileStream.Length} bytes");

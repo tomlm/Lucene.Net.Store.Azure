@@ -1,16 +1,15 @@
 ﻿//    License: Microsoft Public License (Ms-PL) 
+using Azure.Storage.Blobs;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using Microsoft.Azure.Storage.Blob;
-using Microsoft.Azure.Storage;
 using System.IO;
+using System.Linq;
 
 namespace Lucene.Net.Store.Azure
 {
     public class AzureDirectory : Directory
     {
-        private CloudBlobClient _blobClient;
+        private BlobServiceClient _blobClient;
         private string containerName;
         private string subDirectory;
 
@@ -20,7 +19,7 @@ namespace Lucene.Net.Store.Azure
 
         public override LockFactory LockFactory => _lockFactory;
 
-        public AzureDirectory(CloudStorageAccount storageAccount) :
+        public AzureDirectory(string storageAccount) :
             this(storageAccount, null, null)
         {
         }
@@ -32,7 +31,7 @@ namespace Lucene.Net.Store.Azure
         /// <param name="catalog">name of catalog (folder in blob storage, can have subfolders like foo/bar)</param>
         /// <remarks>Default local cache is to use file system in user/appdata/AzureDirectory/Catalog</remarks>
         public AzureDirectory(
-            CloudStorageAccount storageAccount,
+            string storageAccount,
             string catalog)
             : this(storageAccount, catalog, null)
         {
@@ -45,7 +44,7 @@ namespace Lucene.Net.Store.Azure
         /// <param name="catalog">name of catalog (folder in blob storage, can have subfolders like foo/bar)</param>
         /// <param name="cacheDirectory">local Directory object to use for local cache</param>
         public AzureDirectory(
-            CloudStorageAccount storageAccount,
+            string storageAccount,
             string catalog,
             Directory cacheDirectory)
         {
@@ -60,11 +59,11 @@ namespace Lucene.Net.Store.Azure
             this.containerName = Name.Split('/').First();
             this.subDirectory = String.Join("/", Name.Split('/').Skip(1));
 
-            _blobClient = storageAccount.CreateCloudBlobClient();
+            _blobClient = new BlobServiceClient(storageAccount);
             _initCacheDirectory(cacheDirectory);
         }
 
-        public CloudBlobContainer BlobContainer { get; private set; }
+        public BlobContainerClient BlobContainer { get; private set; }
 
         public string Name { get; set; }
 
@@ -89,10 +88,9 @@ namespace Lucene.Net.Store.Azure
         public override string[] ListAll()
         {
             var results = Enumerable.Empty<string>();
-            var blobs = BlobContainer.GetDirectoryReference(this.subDirectory).ListBlobs().ToList();
-            results = from blob in blobs
-                      select blob.Uri.AbsolutePath.Substring(blob.Uri.AbsolutePath.TrimEnd('/').LastIndexOf('/') + 1);
-            return results.ToArray();
+            return BlobContainer.GetBlobsByHierarchy(delimiter: "/", prefix:this.subDirectory)
+                .Where(x => x.IsBlob)
+                .Select(x => x.Blob.Name).ToArray();
         }
 
         /// <summary>Returns true if a file with the given name exists. </summary>
@@ -102,7 +100,7 @@ namespace Lucene.Net.Store.Azure
             // this always comes from the server
             try
             {
-                return BlobContainer.GetBlockBlobReference(GetBlobName(name)).Exists();
+                return BlobContainer.GetBlobClient(GetBlobName(name)).Exists();
             }
             catch (Exception)
             {
@@ -114,7 +112,7 @@ namespace Lucene.Net.Store.Azure
         public override void DeleteFile(string name)
         {
             var blobName = GetBlobName(name);
-            var blob = BlobContainer.GetBlockBlobReference(blobName);
+            var blob = BlobContainer.GetBlobClient(blobName);
             blob.DeleteIfExists();
         }
 
@@ -124,9 +122,7 @@ namespace Lucene.Net.Store.Azure
             try
             {
                 var blobName = GetBlobName(name);
-                var blob = BlobContainer.GetBlockBlobReference(blobName);
-                blob.FetchAttributes();
-                return blob.Properties.Length;
+                return BlobContainer.GetBlobClient(blobName).GetProperties().Value?.ContentLength ?? 0;
             }
             catch (Exception err)
             {
@@ -152,8 +148,8 @@ namespace Lucene.Net.Store.Azure
             try
             {
                 var blobName = GetBlobName(name);
-                var blob = BlobContainer.GetBlockBlobReference(blobName);
-                blob.FetchAttributes();
+                var blob = BlobContainer.GetBlobClient(blobName);
+                blob.GetProperties();
                 return new AzureIndexInput(this, name, blob);
             }
             catch (Exception err)
@@ -207,7 +203,7 @@ namespace Lucene.Net.Store.Azure
         {
             // TODO: Figure out how IOContext comes into play here. So far it doesn't -- Aviad
             var blobName = GetBlobName(name);
-            var blob = BlobContainer.GetBlockBlobReference(blobName);
+            var blob = BlobContainer.GetBlobClient(blobName);
             var indexOutput = new AzureIndexOutput(this, name, blob);
             _nameCache[name] = indexOutput;
             return indexOutput;
@@ -253,7 +249,7 @@ namespace Lucene.Net.Store.Azure
 
         public void CreateContainer()
         {
-            this.BlobContainer = _blobClient.GetContainerReference(this.containerName);
+            this.BlobContainer = _blobClient.GetBlobContainerClient(this.containerName);
             this.BlobContainer.CreateIfNotExists();
         }
 

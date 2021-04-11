@@ -1,7 +1,7 @@
-﻿using System;
+﻿using Azure.Storage.Blobs;
+using System;
 using System.Diagnostics;
 using System.Threading;
-using Microsoft.Azure.Storage.Blob;
 
 namespace Lucene.Net.Store.Azure
 {
@@ -11,13 +11,13 @@ namespace Lucene.Net.Store.Azure
     public class AzureIndexOutput : IndexOutput
     {
         private AzureDirectory _azureDirectory;
-        private CloudBlobContainer _blobContainer;
+        private BlobContainerClient _blobContainer;
         private string _name;
         private IndexOutput _indexOutput;
         private Mutex _fileMutex;
-        private ICloudBlob _blob;
+        private BlobClient _blob;
 
-        public AzureIndexOutput(AzureDirectory azureDirectory, string name, CloudBlockBlob blob)
+        public AzureIndexOutput(AzureDirectory azureDirectory, string name, BlobClient blob)
         {
             this._name = name;
             _fileMutex = BlobMutexManager.GrabMutex(_name);
@@ -58,10 +58,10 @@ namespace Lucene.Net.Store.Azure
                 using (var blobStream = new StreamInput(CacheDirectory.OpenInput(_name, IOContext.DEFAULT)))
                 {
                     // push the blobStream up to the cloud
-                    _blob.UploadFromStream(blobStream);
+                    _blob.Upload(blobStream);
 
                     // set the metadata with the original index file properties
-                    _blob.SetMetadata();
+                    //_blob.SetMetadata();
 
                     Debug.WriteLine($"{_azureDirectory.Name} PUT {_name} bytes to {blobStream.Length} in cloud");
                 }
