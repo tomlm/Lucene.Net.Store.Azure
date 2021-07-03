@@ -34,24 +34,13 @@ To be more concrete: you can have 1..N worker roles adding documents to an index
 
 ## Usage
 
-To use you need to create a blobstorage account on http://azure.com.
+To use you need to create a blobstorage account on https://portal.azure.com.
 
-Create an App.Config or Web.Config and configure your accountinto:
-```xml
-<?xml version="1.0" encoding="utf-8" ?>
-<configuration>
-  <appSettings>
-  <!-- azure SETTINGS -->
-  <add key="BlobStorageEndpoint" value="http://YOURACCOUNT.blob.core.windows.net"/>
-  <add key="AccountName" value="YOURACCOUNTNAME"/>
-  <add key="AccountSharedKey" value="YOURACCOUNTKEY"/>
-  </appSettings>
-</configuration>
-```
 
 To add documents to a catalog is as simple as
 ```c#
-AzureDirectory azureDirectory = new AzureDirectory("TestCatalog");
+CloudStorageAccount cloudStorageAccount = CloudStorageAccount.Parse("UseDevelopmentStorage=true");
+AzureDirectory azureDirectory = new AzureDirectory(cloudStorageAccount, "TestCatalog");
 IndexWriter indexWriter = new IndexWriter(azureDirectory, new StandardAnalyzer(), true);
 Document doc = new Document();
 doc.Add(new Field("id", DateTime.Now.ToFileTimeUtc().ToString(), Field.Store.YES, Field.Index.TOKENIZED, Field.TermVector.NO));
@@ -63,16 +52,16 @@ indexWriter.Close();
 
 And searching is as easy as:
 ```c#
-  IndexSearcher searcher = new IndexSearcher(azureDirectory);                
-  Lucene.Net.QueryParsers.QueryParser parser = QueryParser("Title", new StandardAnalyzer());
-  Lucene.Net.Search.Query query = parser.Parse("Title:(Dog AND Cat)");
+IndexSearcher searcher = new IndexSearcher(azureDirectory);                
+Lucene.Net.QueryParsers.QueryParser parser = QueryParser("Title", new StandardAnalyzer());
+Lucene.Net.Search.Query query = parser.Parse("Title:(Dog AND Cat)");
 
-  Hits hits = searcher.Search(query);
-  for (int i = 0; i < hits.Length(); i++)
-  {
-      Document doc = hits.Doc(i);
-      Console.WriteLine(doc.GetField("Title").StringValue());
-  }
+Hits hits = searcher.Search(query);
+for (int i = 0; i < hits.Length(); i++)
+{
+    Document doc = hits.Doc(i);
+    Console.WriteLine(doc.GetField("Title").StringValue());
+}
 ```
 
 ### Caching and Compression
@@ -83,12 +72,14 @@ By default AzureDirectory stores this local cache in a temporary folder. You can
 
 This example stores the cache in a ram directory:
 ```c#
-AzureDirectory azureDirectory = new AzureDirectory("MyIndex", new RAMDirectory());
+CloudStorageAccount cloudStorageAccount = CloudStorageAccount.Parse("UseDevelopmentStorage=true");
+AzureDirectory azureDirectory = new AzureDirectory(cloudStorageAccount, "MyIndex", new RAMDirectory());
 ```
 
 And this example stores in the file system in C:\myindex
 ```c#
-AzureDirectory azureDirectory = new AzureDirectory("MyIndex", new FSDirectory(@"c:\myindex"));
+CloudStorageAccount cloudStorageAccount = CloudStorageAccount.Parse("UseDevelopmentStorage=true");
+AzureDirectory azureDirectory = new AzureDirectory(cloudStorageAccount, "MyIndex", new FSDirectory(@"c:\myindex"));
 ```
 
 
