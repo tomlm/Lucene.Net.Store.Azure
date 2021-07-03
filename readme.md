@@ -182,16 +182,14 @@ You don't have to create a single catalog because Lucene allows you to simply co
 
 Something like this:
 ```
-IndexMachine1 =>IndexWriter(Catalog1)
-IndexMachine2 =>IndexWriter(Catalog1)
+IndexMachine1 => IndexWriter(Catalog1)
+IndexMachine2 => IndexWriter(Catalog2)
 ...
-IndexMachineM =>IndexWriter(CatalogM)
+IndexMachineM => IndexWriter(CatalogM)
 
 SearchMachine1 => MultiSearcher(IndexSearcher(Catalog1),IndexSearcher(Catalog2),...IndexSearcher(CatalogM))
 SearchMachine2 => MultiSearcher(IndexSearcher(Catalog1),IndexSearcher(Catalog2),...IndexSearcher(CatalogM))
-.
-.
-.
+...
 SearchMachineN => MultiSearcher(IndexSearcher(Catalog1),IndexSearcher(Catalog2),... IndexSearcher(CatalogM))
 ```
 
