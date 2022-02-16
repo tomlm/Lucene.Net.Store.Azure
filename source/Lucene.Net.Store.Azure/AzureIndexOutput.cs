@@ -98,16 +98,14 @@ namespace Lucene.Net.Store.Azure
             _indexOutput.WriteBytes(b, offset, length);
         }
 
-        public override long GetFilePointer()
-        {
-            return _indexOutput.GetFilePointer();
-        }
-
+        [Obsolete("(4.1) this method will be removed in Lucene 5.0")]
         public override void Seek(long pos)
         {
-            //_indexOutput.Seek(pos);
+            // obsolete
         }
 
         public override long Checksum => _indexOutput.Checksum;
+
+        public override long Position => _indexOutput.Position;
     }
 }

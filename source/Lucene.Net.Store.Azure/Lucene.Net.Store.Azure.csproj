@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>4.8.0-beta011</Version>
+    <Version>4.8.0-beta015</Version>
     <Authors>Tom Laird-McConnell</Authors>
     <Title>Azure blob storage for Lucene.net</Title>
     <Summary>This project allows you to store Lucene Indexes in by Azure BlobStorage.</Summary>
@@ -13,9 +13,9 @@
     <RepositoryUrl>https://github.com/tomlm/Lucene.Net.Store.Azure</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MS-PL</PackageLicenseExpression>
-    <AssemblyVersion>4.8.0.11</AssemblyVersion>
-    <FileVersion>4.8.0.11</FileVersion>
-    <PackageReleaseNotes>This is a release with dependency on Lucene.Net 4.8.0.beta 0011</PackageReleaseNotes>
+    <AssemblyVersion>4.8.0.15</AssemblyVersion>
+    <FileVersion>4.8.0.15</FileVersion>
+    <PackageReleaseNotes>This is a release with dependency on Lucene.Net 4.8.0.beta 0015</PackageReleaseNotes>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -27,9 +27,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.Storage.Blobs" Version="12.8.1" />
-    <PackageReference Include="Lucene.Net" Version="4.8.0-beta00011" />
-    <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00011" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.10.0" />
+    <PackageReference Include="Lucene.Net" Version="4.8.0-beta00015" />
+    <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00015" />
   </ItemGroup>
 
 </Project>

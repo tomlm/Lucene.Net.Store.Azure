@@ -120,7 +120,7 @@ namespace Lucene.Net.Store.Azure
             {
                 blob.GetBlobLeaseClient(_leaseid).Break();
             }
-            catch (RequestFailedException err)
+            catch (RequestFailedException)
             {
             }
             _leaseid = null;

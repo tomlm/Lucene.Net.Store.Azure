@@ -124,7 +124,7 @@ namespace Lucene.Net.Store.Azure
                 var blobName = GetBlobName(name);
                 return BlobContainer.GetBlobClient(blobName).GetProperties().Value?.ContentLength ?? 0;
             }
-            catch (Exception err)
+            catch 
             {
                 return 0;
             }

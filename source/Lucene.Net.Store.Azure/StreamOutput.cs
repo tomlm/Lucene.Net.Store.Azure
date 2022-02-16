@@ -49,7 +49,7 @@ namespace Lucene.Net.Store.Azure
         {
             get
             {
-                return Output.GetFilePointer();
+                return Output.Position;
             }
             set
             {
@@ -70,12 +70,12 @@ namespace Lucene.Net.Store.Azure
                     Output.Seek(offset);
                     break;
                 case SeekOrigin.Current:
-                    Output.Seek(Output.GetFilePointer() + offset);
+                    Output.Seek(Output.Position + offset);
                     break;
                 case SeekOrigin.End:
                     throw new System.NotImplementedException();
             }
-            return Output.GetFilePointer();
+            return Output.Position;
         }
 
         public override void SetLength(long value)

@@ -86,17 +86,14 @@ namespace Lucene.Net.Store.Azure
             _indexInput.ReadBytes(b, offset, len);
         }
 
-        public override long GetFilePointer()
-        {
-            return _indexInput.GetFilePointer();
-        }
-
         public override void Seek(long pos)
         {
             _indexInput?.Seek(pos);
         }
 
         public override long Length => _indexInput.Length;
+
+        public override long Position => _indexInput.Position;
 
         protected override void Dispose(bool disposing)
         {
@@ -122,7 +119,7 @@ namespace Lucene.Net.Store.Azure
         public override Object Clone()
         {
             var clone = new AzureIndexInput(this._azureDirectory, this._name, this._blob);
-            clone.Seek(this.GetFilePointer());
+            clone.Seek(this.Position);
             return clone;
         }
     }
