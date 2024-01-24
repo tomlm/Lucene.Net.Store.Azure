@@ -10,8 +10,8 @@ namespace Lucene.Net.Store.Azure
     public class AzureDirectory : Directory
     {
         private BlobServiceClient _blobClient;
-        private string containerName;
-        private string subDirectory;
+        private readonly string containerName;
+        private readonly string subDirectory;
 
         private readonly Dictionary<string, AzureLock> _locks = new Dictionary<string, AzureLock>();
         private LockFactory _lockFactory = new NativeFSLockFactory();
@@ -63,6 +63,32 @@ namespace Lucene.Net.Store.Azure
             _initCacheDirectory(cacheDirectory);
         }
 
+        /// <summary>
+        /// Create an AzureDirectory
+        /// </summary>
+        /// <param name="blobServiceClient">BlobServiceClient to use</param>
+        /// <param name="catalog">name of catalog (folder in blob storage, can have subfolders like foo/bar)</param>
+        /// <param name="cacheDirectory">local Directory object to use for local cache</param>
+        public AzureDirectory(
+            BlobServiceClient blobServiceClient,
+            string catalog,
+            Directory cacheDirectory)
+        {
+            if (blobServiceClient == null)
+                throw new ArgumentNullException("blobServiceClient");
+
+            if (string.IsNullOrEmpty(catalog))
+                Name = "lucene";
+            else
+                Name = catalog.ToLower();
+
+            this.containerName = Name.Split('/').First();
+            this.subDirectory = String.Join("/", Name.Split('/').Skip(1));
+
+            _blobClient = blobServiceClient;
+            _initCacheDirectory(cacheDirectory);
+        }
+
         public BlobContainerClient BlobContainer { get; private set; }
 
         public string Name { get; set; }
@@ -88,7 +114,7 @@ namespace Lucene.Net.Store.Azure
         public override string[] ListAll()
         {
             var results = Enumerable.Empty<string>();
-            return BlobContainer.GetBlobsByHierarchy(delimiter: "/", prefix:this.subDirectory)
+            return BlobContainer.GetBlobsByHierarchy(delimiter: "/", prefix: this.subDirectory)
                 .Where(x => x.IsBlob)
                 .Select(x => x.Blob.Name).ToArray();
         }
@@ -124,7 +150,7 @@ namespace Lucene.Net.Store.Azure
                 var blobName = GetBlobName(name);
                 return BlobContainer.GetBlobClient(blobName).GetProperties().Value?.ContentLength ?? 0;
             }
-            catch 
+            catch
             {
                 return 0;
             }
