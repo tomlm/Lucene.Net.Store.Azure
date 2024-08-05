@@ -70,7 +70,7 @@ AzureDirectory compresses blobs before sent to the blob storage. Blobs are autom
 
 By default AzureDirectory stores this local cache in a temporary folder. You can easily control where the local cache is stored by passing in a Directory object for whatever type and location of storage you want.
 
-This example stores the cache in a ram directory:
+This example stores the cache in a ram directory (you **must** use it when your solution is running on **Azure Functions**):
 ```c#
 CloudStorageAccount cloudStorageAccount = CloudStorageAccount.Parse("UseDevelopmentStorage=true");
 AzureDirectory azureDirectory = new AzureDirectory(cloudStorageAccount, "MyIndex", new RAMDirectory());
