@@ -1,7 +1,10 @@
 ﻿//    License: Microsoft Public License (Ms-PL) 
+using Azure;
 using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Threading;
 
 
@@ -18,7 +21,7 @@ namespace Lucene.Net.Store.Azure
         private BlobClient _blob;
         private IndexInput _indexInput;
         private Mutex _fileMutex;
-        
+
         public AzureIndexInput(AzureDirectory azureDirectory, string name, BlobClient blob)
             : base(name)
         {
@@ -33,7 +36,6 @@ namespace Lucene.Net.Store.Azure
             {
                 _blobContainer = azureDirectory.BlobContainer;
                 _blob = blob;
-
                 bool fileNeeded = false;
                 if (!CacheDirectory.FileExists(name))
                 {
@@ -41,24 +43,57 @@ namespace Lucene.Net.Store.Azure
                 }
                 else
                 {
-                    long cachedLength = CacheDirectory.FileLength(name);
-                    var properties = blob.GetProperties();
-                    long blobLength = properties.Value?.ContentLength ?? 0;
-                    if (cachedLength != blobLength)
-                        fileNeeded = true;
+                    try
+                    {
+                        var blobProperties = blob.GetProperties();
+                        long cachedLength = CacheDirectory.FileLength(name);
+                        long blobLength = blobProperties?.Value?.ContentLength ?? 0;
+                        if (cachedLength != blobLength)
+                            fileNeeded = true;
+                    }
+                    catch (RequestFailedException err)
+                    {
+                        // if blob not found
+                        if (err.Status == 404)
+                        {
+                            // then we should remove from cache directory.
+                            CacheDirectory.DeleteFile(name);
+                            Debug.WriteLine($"{_azureDirectory.Name} {name} Does not exist");
+                            throw new FileNotFoundException(name, err);
+                        }
+                    }
                 }
 
                 // if the file does not exist
                 // or if it exists and it is older then the lastmodified time in the blobproperties (which always comes from the blob storage)
                 if (fileNeeded)
                 {
-                    using (StreamOutput fileStream = _azureDirectory.CreateCachedOutputAsStream(name))
+                    try
                     {
-                        // get the blob
-                        _blob.DownloadTo(fileStream);
-                        fileStream.Flush();
+                        using (StreamOutput fileStream = _azureDirectory.CreateCachedOutputAsStream(name))
+                        {
 
-                        Debug.WriteLine($"{_azureDirectory.Name} GET {_name} RETREIVED {fileStream.Length} bytes");
+                            // get the blob
+                            _blob.DownloadTo(fileStream);
+                            fileStream.Flush();
+
+                            Debug.WriteLine($"{_azureDirectory.Name} GET {_name} RETREIVED {fileStream.Length} bytes");
+                        }
+                    }
+                    catch (RequestFailedException err)
+                    {
+                        // if blob not found
+                        if (err.Status == 404)
+                        {
+                            // then we should remove from cache directory.
+                            CacheDirectory.DeleteFile(name);
+                            Debug.WriteLine($"{_azureDirectory.Name} {name} Does not exist");
+                            throw new FileNotFoundException(name, err);
+                        }
+                    }
+                    catch (Exception err)
+                    {
+                        Debug.WriteLine($"{_azureDirectory.Name} GET {_name} ERROR {err.Message}");
                     }
                 }
 #if FULLDEBUG

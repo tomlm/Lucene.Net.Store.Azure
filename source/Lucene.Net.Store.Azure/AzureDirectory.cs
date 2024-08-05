@@ -175,8 +175,11 @@ namespace Lucene.Net.Store.Azure
             {
                 var blobName = GetBlobName(name);
                 var blob = BlobContainer.GetBlobClient(blobName);
-                blob.GetProperties();
                 return new AzureIndexInput(this, name, blob);
+            }
+            catch (FileNotFoundException fileNotFoundErr)
+            {
+                throw;
             }
             catch (Exception err)
             {
