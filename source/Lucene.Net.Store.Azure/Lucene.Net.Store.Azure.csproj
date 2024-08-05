@@ -1,33 +1,41 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>4.8.0-beta015</Version>
+    <Version>4.8.1-beta016</Version>
     <Authors>Tom Laird-McConnell</Authors>
     <Title>Azure blob storage for Lucene.net</Title>
     <Summary>This project allows you to store Lucene Indexes in by Azure BlobStorage.</Summary>
     <Description>This project allows you to create Lucene Indexes via a AzureDirectory object which uses Azure BlobStorage for persistent storage.  This .NET Standard compliant library for us with .NET Core or .NET Desktop. It uses Lucene.Net 4.8.0.beta00011</Description>
-    <PackageLicenseFile></PackageLicenseFile>
     <PackageProjectUrl>https://github.com/tomlm/Lucene.Net.Store.Azure</PackageProjectUrl>
     <RepositoryUrl>https://github.com/tomlm/Lucene.Net.Store.Azure</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MS-PL</PackageLicenseExpression>
-    <AssemblyVersion>4.8.0.15</AssemblyVersion>
-    <FileVersion>4.8.0.15</FileVersion>
-    <PackageReleaseNotes>This is a release with dependency on Lucene.Net 4.8.0.beta 0015</PackageReleaseNotes>
+    <AssemblyVersion>4.8.1.16</AssemblyVersion>
+    <FileVersion>4.8.1.16</FileVersion>
+    <PackageReleaseNotes>This is a release with dependency on Lucene.Net 4.8.0.beta 0016</PackageReleaseNotes>
+    <PackageIconUrl>https://raw.githubusercontent.com/tomlm/Lucene.Net.Store.Azure/master/icon.png</PackageIconUrl>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageReadmeFile>readme.md</PackageReadmeFile>
   </PropertyGroup>
-
+  
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <DefineConstants>TRACE;FULLDEBUG</DefineConstants>
   </PropertyGroup>
+  
+  <PropertyGroup>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
+  </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="license.md" />
+    <None Include="../../readme.md" Pack="true" PackagePath="" />
+    <None Include="../../icon.png" Pack="true" PackagePath="" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.Storage.Blobs" Version="12.12.0" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.13.0" />
     <PackageReference Include="Lucene.Net" Version="4.8.0-beta00016" />
     <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00016" />
   </ItemGroup>

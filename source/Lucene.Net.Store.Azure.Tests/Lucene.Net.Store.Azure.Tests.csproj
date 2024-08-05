@@ -7,11 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Lucene.Net.QueryParser" Version="4.8.0-beta00011" />
-    <PackageReference Include="Microsoft.Azure.Storage.Blob" Version="11.1.2" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.9.4" />
-    <PackageReference Include="MSTest.TestAdapter" Version="2.2.3" />
-    <PackageReference Include="MSTest.TestFramework" Version="2.2.3" />
+    <PackageReference Include="Lucene.Net.QueryParser" Version="4.8.0-beta00016" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
+    <PackageReference Include="MSTest.TestAdapter" Version="3.2.2" />
+    <PackageReference Include="MSTest.TestFramework" Version="3.2.2" />
   </ItemGroup>
 
   <ItemGroup>
