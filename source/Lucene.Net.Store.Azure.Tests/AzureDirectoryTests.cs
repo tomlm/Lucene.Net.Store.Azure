@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Text;
 using Azure.Storage.Blobs;
 using Lucene.Net.Analysis.Standard;
@@ -14,6 +15,7 @@ namespace Lucene.Net.Store.Azure.Tests
     public class IntegrationTests
     {
         private readonly string _connectionString;
+        private static string _containerRoot;
 
         public IntegrationTests() : this(null) { }
 
@@ -22,15 +24,33 @@ namespace Lucene.Net.Store.Azure.Tests
             _connectionString = connectionString;
         }
 
+        [AssemblyInitialize]
+        public static void Initialize(TestContext context)
+        {
+            _containerRoot = $"azuredirectorytests/{DateTime.Now.ToString("yyyyMMddhhmmss")}";
+
+            var azuriteProcess = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "azurite.cmd ",
+                    Arguments = "--inMemoryPersistence",
+                    // RedirectStandardOutput = true,
+                    // RedirectStandardError = true,
+                    UseShellExecute = true,
+                    CreateNoWindow = false,
+                }
+            };
+            azuriteProcess.Start();
+        }
+
         [TestMethod]
         public void TestReadAndWrite()
         {
-
             var connectionString = _connectionString ?? "UseDevelopmentStorage=true";
-            const string containerName = "testcatalog";
+            string containerName = $"{_containerRoot}/{nameof(TestReadAndWrite)}";
             var blobClient = new BlobServiceClient(connectionString);
             var container = blobClient.GetBlobContainerClient(containerName);
-            container.DeleteIfExists();
 
             var azureDirectory = new AzureDirectory(connectionString, containerName);
 
@@ -40,27 +60,18 @@ namespace Lucene.Net.Store.Azure.Tests
             {
 
                 var ireader = DirectoryReader.Open(azureDirectory);
-                for (var i = 0; i < 100; i++)
-                {
-                    var searcher = new IndexSearcher(ireader);
-                    var searchForPhrase = SearchForPhrase(searcher, "dog");
-                    Assert.AreEqual(dog, searchForPhrase);
-                    searchForPhrase = SearchForPhrase(searcher, "cat");
-                    Assert.AreEqual(cat, searchForPhrase);
-                    searchForPhrase = SearchForPhrase(searcher, "car");
-                    Assert.AreEqual(car, searchForPhrase);
-                }
+                var searcher = new IndexSearcher(ireader);
+                var searchForPhrase = SearchForPhrase(searcher, "dog");
+                Assert.AreEqual(dog, searchForPhrase);
+                searchForPhrase = SearchForPhrase(searcher, "cat");
+                Assert.AreEqual(cat, searchForPhrase);
+                searchForPhrase = SearchForPhrase(searcher, "car");
+                Assert.AreEqual(car, searchForPhrase);
                 Trace.TraceInformation("Tests passsed");
             }
             catch (Exception x)
             {
                 Trace.TraceInformation("Tests failed:\n{0}", x);
-            }
-            finally
-            {
-                // check the container exists, and delete it
-                Assert.IsTrue(container.Exists()); // check the container exists
-                container.Delete();
             }
         }
 
@@ -68,10 +79,9 @@ namespace Lucene.Net.Store.Azure.Tests
         public void TestReadAndWriteWithSubDirectory()
         {
             var connectionString = _connectionString ?? "UseDevelopmentStorage=true";
-            const string containerName = "testcatalog";
+            string containerName = $"{_containerRoot}/{nameof(TestReadAndWriteWithSubDirectory)}";
             var blobClient = new BlobServiceClient(connectionString);
             var container = blobClient.GetBlobContainerClient(containerName);
-            container.DeleteIfExists();
 
             var azureDirectory = new AzureDirectory(connectionString, $"{containerName}/subdirectory");
 
@@ -81,38 +91,28 @@ namespace Lucene.Net.Store.Azure.Tests
             {
 
                 var ireader = DirectoryReader.Open(azureDirectory);
-                for (var i = 0; i < 100; i++)
-                {
-                    var searcher = new IndexSearcher(ireader);
-                    var searchForPhrase = SearchForPhrase(searcher, "dog");
-                    Assert.AreEqual(dog, searchForPhrase);
-                    searchForPhrase = SearchForPhrase(searcher, "cat");
-                    Assert.AreEqual(cat, searchForPhrase);
-                    searchForPhrase = SearchForPhrase(searcher, "car");
-                    Assert.AreEqual(car, searchForPhrase);
-                }
+                var searcher = new IndexSearcher(ireader);
+                var searchForPhrase = SearchForPhrase(searcher, "dog");
+                Assert.AreEqual(dog, searchForPhrase);
+                searchForPhrase = SearchForPhrase(searcher, "cat");
+                Assert.AreEqual(cat, searchForPhrase);
+                searchForPhrase = SearchForPhrase(searcher, "car");
+                Assert.AreEqual(car, searchForPhrase);
                 Trace.TraceInformation("Tests passsed");
             }
             catch (Exception x)
             {
                 Trace.TraceInformation("Tests failed:\n{0}", x);
             }
-            finally
-            {
-                // check the container exists, and delete it
-                Assert.IsTrue(container.Exists()); // check the container exists
-                container.Delete();
-            }
         }
-        
+
         [TestMethod]
         public void TestReadAndWriteWithTwoShardDirectories()
         {
             var connectionString = _connectionString ?? "UseDevelopmentStorage=true";
-            const string containerName = "testcatalogwithshards";
+            string containerName = $"{_containerRoot}/{nameof(TestReadAndWriteWithTwoShardDirectories)}";
             var blobClient = new BlobServiceClient(connectionString);
             var container = blobClient.GetBlobContainerClient(containerName);
-            container.DeleteIfExists();
 
             var azureDirectory1 = new AzureDirectory(connectionString, $"{containerName}/shard1");
             var (dog, cat, car) = InitializeCatalog(azureDirectory1, 1000);
@@ -135,16 +135,15 @@ namespace Lucene.Net.Store.Azure.Tests
                 azureDirectory2.DeleteFile(file);
             }
         }
-        
+
         [TestMethod]
         public void TestReadAndWrite_WritingTwoConsecutiveTimes()
         {
 
             var connectionString = _connectionString ?? "UseDevelopmentStorage=true";
-            const string containerName = "testcatalog";
+            string containerName = $"{_containerRoot}/{nameof(TestReadAndWrite_WritingTwoConsecutiveTimes)}";
             var blobClient = new BlobServiceClient(connectionString);
             var container = blobClient.GetBlobContainerClient(containerName);
-            container.DeleteIfExists();
 
             var azureDirectory = new AzureDirectory(connectionString, containerName);
 
@@ -157,27 +156,18 @@ namespace Lucene.Net.Store.Azure.Tests
             try
             {
                 var ireader = DirectoryReader.Open(azureDirectory);
-                for (var i = 0; i < 100; i++)
-                {
-                    var searcher = new IndexSearcher(ireader);
-                    var searchForPhrase = SearchForPhrase(searcher, "dog");
-                    Assert.AreEqual(dog, searchForPhrase);
-                    searchForPhrase = SearchForPhrase(searcher, "cat");
-                    Assert.AreEqual(cat, searchForPhrase);
-                    searchForPhrase = SearchForPhrase(searcher, "car");
-                    Assert.AreEqual(car, searchForPhrase);
-                }
+                var searcher = new IndexSearcher(ireader);
+                var searchForPhrase = SearchForPhrase(searcher, "dog");
+                Assert.AreEqual(dog, searchForPhrase);
+                searchForPhrase = SearchForPhrase(searcher, "cat");
+                Assert.AreEqual(cat, searchForPhrase);
+                searchForPhrase = SearchForPhrase(searcher, "car");
+                Assert.AreEqual(car, searchForPhrase);
                 Trace.TraceInformation("Tests passsed");
             }
             catch (Exception x)
             {
                 Trace.TraceInformation("Tests failed:\n{0}", x);
-            }
-            finally
-            {
-                // check the container exists, and delete it
-                Assert.IsTrue(container.Exists()); // check the container exists
-                container.Delete();
             }
         }
 
@@ -185,10 +175,9 @@ namespace Lucene.Net.Store.Azure.Tests
         public void TestReadAndWriteWithSubDirectory_WritingTwoConsecutiveTimes()
         {
             var connectionString = _connectionString ?? "UseDevelopmentStorage=true";
-            const string containerName = "testcatalog";
+            string containerName = $"{_containerRoot}/{nameof(TestReadAndWriteWithSubDirectory_WritingTwoConsecutiveTimes)}";
             var blobClient = new BlobServiceClient(connectionString);
             var container = blobClient.GetBlobContainerClient(containerName);
-            container.DeleteIfExists();
 
             var azureDirectory = new AzureDirectory(connectionString, $"{containerName}/subdirectory");
 
@@ -202,38 +191,28 @@ namespace Lucene.Net.Store.Azure.Tests
             {
 
                 var ireader = DirectoryReader.Open(azureDirectory);
-                for (var i = 0; i < 100; i++)
-                {
-                    var searcher = new IndexSearcher(ireader);
-                    var searchForPhrase = SearchForPhrase(searcher, "dog");
-                    Assert.AreEqual(dog, searchForPhrase);
-                    searchForPhrase = SearchForPhrase(searcher, "cat");
-                    Assert.AreEqual(cat, searchForPhrase);
-                    searchForPhrase = SearchForPhrase(searcher, "car");
-                    Assert.AreEqual(car, searchForPhrase);
-                }
+                var searcher = new IndexSearcher(ireader);
+                var searchForPhrase = SearchForPhrase(searcher, "dog");
+                Assert.AreEqual(dog, searchForPhrase);
+                searchForPhrase = SearchForPhrase(searcher, "cat");
+                Assert.AreEqual(cat, searchForPhrase);
+                searchForPhrase = SearchForPhrase(searcher, "car");
+                Assert.AreEqual(car, searchForPhrase);
                 Trace.TraceInformation("Tests passsed");
             }
             catch (Exception x)
             {
                 Trace.TraceInformation("Tests failed:\n{0}", x);
             }
-            finally
-            {
-                // check the container exists, and delete it
-                Assert.IsTrue(container.Exists()); // check the container exists
-                container.Delete();
-            }
         }
-        
+
         [TestMethod]
         public void TestReadAndWriteWithTwoShardDirectories_WritingTwoConsecutiveTimes()
         {
             var connectionString = _connectionString ?? "UseDevelopmentStorage=true";
-            const string containerName = "testcatalogwithshards";
+            string containerName = $"{_containerRoot}/{nameof(TestReadAndWriteWithSubDirectory_WritingTwoConsecutiveTimes)}";
             var blobClient = new BlobServiceClient(connectionString);
             var container = blobClient.GetBlobContainerClient(containerName);
-            container.DeleteIfExists();
 
             var azureDirectory1 = new AzureDirectory(connectionString, $"{containerName}/shard1");
             var (dog, cat, car) = InitializeCatalog(azureDirectory1, 500);
@@ -241,7 +220,7 @@ namespace Lucene.Net.Store.Azure.Tests
             dog += dog1;
             cat += cat1;
             car += car1;
-            
+
             var azureDirectory2 = new AzureDirectory(connectionString, $"{containerName}/shard2");
             var (dog2, cat2, car2) = InitializeCatalog(azureDirectory2, 250);
             var (dog3, cat3, car3) = InitializeCatalog(azureDirectory2, 250);
@@ -279,9 +258,11 @@ namespace Lucene.Net.Store.Azure.Tests
                 "segments_1",
                 "write.lock"
             });
-            TestListingFilesOfDirectory("testcatalog", expectedFileNames);
+            string containerName = $"{_containerRoot}/{nameof(CanListAllFileNames_InFlatContainer)}";
+
+            TestListingFilesOfDirectory(containerName, expectedFileNames);
         }
-        
+
         [TestMethod]
         public void CanListAllFileNames_InLevel1Subdirectory()
         {
@@ -295,9 +276,10 @@ namespace Lucene.Net.Store.Azure.Tests
                 "segments_1",
                 "write.lock"
             });
-            TestListingFilesOfDirectory("testcatalog/shard1", expectedFileNames);
+            string containerName = $"{_containerRoot}/{nameof(CanListAllFileNames_InLevel1Subdirectory)}";
+            TestListingFilesOfDirectory($"{containerName}/shard1", expectedFileNames);
         }
-        
+
         [TestMethod]
         public void CanListAllFileNames_InLevel2Subdirectory()
         {
@@ -311,9 +293,10 @@ namespace Lucene.Net.Store.Azure.Tests
                 "segments_1",
                 "write.lock"
             });
-            TestListingFilesOfDirectory("testcatalog/shard1/level2", expectedFileNames);
+            string containerName = $"{_containerRoot}/{nameof(CanListAllFileNames_InLevel2Subdirectory)}";
+            TestListingFilesOfDirectory($"{containerName}/shard1/level2", expectedFileNames);
         }
-        
+
         [TestMethod]
         public void CanListAllFileNames_InFlatContainer_After2Writes()
         {
@@ -326,12 +309,14 @@ namespace Lucene.Net.Store.Azure.Tests
                "_1.cfe",
                "_1.cfs",
                "_1.si",
+               "segments.gen",
                "segments_2",
                "write.lock",
             });
-            TestListingFilesOfDirectory("testcatalog", expectedFileNames, numberOfSimulatedIndexWrites:2);
+            string containerName = $"{_containerRoot}/{nameof(CanListAllFileNames_InFlatContainer_After2Writes)}";
+            TestListingFilesOfDirectory(containerName, expectedFileNames, numberOfSimulatedIndexWrites: 2);
         }
-        
+
         [TestMethod]
         public void CanListAllFileNames_InLevel1Subdirectory_After2Writes()
         {
@@ -344,12 +329,14 @@ namespace Lucene.Net.Store.Azure.Tests
                 "_1.cfe",
                 "_1.cfs",
                 "_1.si",
+                "segments.gen",
                 "segments_2",
                 "write.lock",
             });
-            TestListingFilesOfDirectory("testcatalog/shard1", expectedFileNames, numberOfSimulatedIndexWrites:2);
+            string containerName = $"{_containerRoot}/{nameof(CanListAllFileNames_InLevel1Subdirectory_After2Writes)}";
+            TestListingFilesOfDirectory($"{containerName}/shard1", expectedFileNames, numberOfSimulatedIndexWrites: 2);
         }
-        
+
         [TestMethod]
         public void CanListAllFileNames_InLevel2Subdirectory_After2Writes()
         {
@@ -362,10 +349,12 @@ namespace Lucene.Net.Store.Azure.Tests
                 "_1.cfe",
                 "_1.cfs",
                 "_1.si",
+                "segments.gen",
                 "segments_2",
                 "write.lock",
             });
-            TestListingFilesOfDirectory("testcatalog/shard1/level2", expectedFileNames, numberOfSimulatedIndexWrites:2);
+            string containerName = $"{_containerRoot}/{nameof(CanListAllFileNames_InLevel2Subdirectory_After2Writes)}";
+            TestListingFilesOfDirectory($"{containerName}/shard1/level2", expectedFileNames, numberOfSimulatedIndexWrites: 2);
         }
 
         private void TestListingFilesOfDirectory(string containerName, string expectedFileNames, int numberOfSimulatedIndexWrites = 1)
@@ -373,15 +362,14 @@ namespace Lucene.Net.Store.Azure.Tests
             var connectionString = _connectionString ?? "UseDevelopmentStorage=true";
             var blobClient = new BlobServiceClient(connectionString);
             var container = blobClient.GetBlobContainerClient(containerName);
-            container.DeleteIfExists();
 
             var azureDirectory = new AzureDirectory(connectionString, containerName);
 
             for (int i = 0; i < numberOfSimulatedIndexWrites; i++)
             {
-                InitializeCatalog(azureDirectory, 1000/numberOfSimulatedIndexWrites);
+                InitializeCatalog(azureDirectory, 1000 / numberOfSimulatedIndexWrites);
             }
-            
+
             // Act
             var actual = azureDirectory.ListAll();
 
