@@ -113,10 +113,10 @@ namespace Lucene.Net.Store.Azure
         /// <summary>Returns an array of strings, one for each file in the directory. </summary>
         public override string[] ListAll()
         {
-            var results = Enumerable.Empty<string>();
-            return BlobContainer.GetBlobsByHierarchy(delimiter: "/", prefix: this.subDirectory)
+            var prefix = string.IsNullOrEmpty(this.subDirectory) ? null : this.subDirectory + "/";
+            return BlobContainer.GetBlobsByHierarchy(delimiter: "/", prefix: prefix)
                 .Where(x => x.IsBlob)
-                .Select(x => x.Blob.Name).ToArray();
+                .Select(x => x.Blob.Name.Split('/').Last()).ToArray();
         }
 
         /// <summary>Returns true if a file with the given name exists. </summary>
