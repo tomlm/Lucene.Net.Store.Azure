@@ -1,6 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text;
 using Azure.Storage.Blobs;
 using Lucene.Net.Analysis.Standard;
@@ -47,18 +51,11 @@ namespace Lucene.Net.Store.Azure.Tests
         [TestMethod]
         public void TestReadAndWrite()
         {
-            var connectionString = _connectionString ?? "UseDevelopmentStorage=true";
-            string containerName = $"{_containerRoot}/{nameof(TestReadAndWrite)}";
-            var blobClient = new BlobServiceClient(connectionString);
-            var container = blobClient.GetBlobContainerClient(containerName);
-
-            var azureDirectory = new AzureDirectory(connectionString, containerName);
-
-            var (dog, cat, car) = InitializeCatalog(azureDirectory, 1000);
-
+            string containerName = $"{_containerRoot}/{GetMethodName()}";
+            var (azureDirectory, expectedDirectory) = Arrange(containerName);
+            var (dog, cat, car) = InitializeCatalog(azureDirectory, 1000, expectedDirectory);
             try
             {
-
                 var ireader = DirectoryReader.Open(azureDirectory);
                 var searcher = new IndexSearcher(ireader);
                 var searchForPhrase = SearchForPhrase(searcher, "dog");
@@ -73,19 +70,16 @@ namespace Lucene.Net.Store.Azure.Tests
             {
                 Trace.TraceInformation("Tests failed:\n{0}", x);
             }
+
+            AssertFilesAreEqual(azureDirectory, expectedDirectory);
         }
 
         [TestMethod]
         public void TestReadAndWriteWithSubDirectory()
         {
-            var connectionString = _connectionString ?? "UseDevelopmentStorage=true";
-            string containerName = $"{_containerRoot}/{nameof(TestReadAndWriteWithSubDirectory)}";
-            var blobClient = new BlobServiceClient(connectionString);
-            var container = blobClient.GetBlobContainerClient(containerName);
-
-            var azureDirectory = new AzureDirectory(connectionString, $"{containerName}/subdirectory");
-
-            var (dog, cat, car) = InitializeCatalog(azureDirectory, 1000);
+            string containerName = $"{_containerRoot}/{GetMethodName()}";
+            var (azureDirectory, expectedDirectory) = Arrange($"{containerName}/subdirectory");
+            var (dog, cat, car) = InitializeCatalog(azureDirectory, 1000, expectedDirectory);
 
             try
             {
@@ -104,28 +98,31 @@ namespace Lucene.Net.Store.Azure.Tests
             {
                 Trace.TraceInformation("Tests failed:\n{0}", x);
             }
+            
+            AssertFilesAreEqual(azureDirectory, expectedDirectory);
         }
 
         [TestMethod]
         public void TestReadAndWriteWithTwoShardDirectories()
         {
-            var connectionString = _connectionString ?? "UseDevelopmentStorage=true";
-            string containerName = $"{_containerRoot}/{nameof(TestReadAndWriteWithTwoShardDirectories)}";
-            var blobClient = new BlobServiceClient(connectionString);
-            var container = blobClient.GetBlobContainerClient(containerName);
+            string containerName = $"{_containerRoot}/{GetMethodName()}";
+            
+            var (azureDirectory1, expectedDirectory1) = Arrange($"{containerName}/shard1");
+            var (dog, cat, car) = InitializeCatalog(azureDirectory1, 1000, expectedDirectory1);
 
-            var azureDirectory1 = new AzureDirectory(connectionString, $"{containerName}/shard1");
-            var (dog, cat, car) = InitializeCatalog(azureDirectory1, 1000);
-            var azureDirectory2 = new AzureDirectory(connectionString, $"{containerName}/shard2");
-            var (dog2, cat2, car2) = InitializeCatalog(azureDirectory2, 500);
+            var (azureDirectory2, expectedDirectory2) = Arrange($"{containerName}/shard2");
+            var (dog2, cat2, car2) = InitializeCatalog(azureDirectory2, 1000, expectedDirectory2);
 
             ValidateDirectory(azureDirectory1, dog, cat, car);
             ValidateDirectory(azureDirectory2, dog2, cat2, car2);
+            AssertFilesAreEqual(azureDirectory1, expectedDirectory1, "#1 shard1| ");
+            AssertFilesAreEqual(azureDirectory2, expectedDirectory2, "#1 shard2| ");
 
             // delete all azureDirectory1 blobs
             foreach (string file in azureDirectory1.ListAll())
             {
                 azureDirectory1.DeleteFile(file);
+                expectedDirectory1.DeleteFile(file);
             }
 
             ValidateDirectory(azureDirectory2, dog2, cat2, car2);
@@ -133,22 +130,21 @@ namespace Lucene.Net.Store.Azure.Tests
             foreach (string file in azureDirectory2.ListAll())
             {
                 azureDirectory2.DeleteFile(file);
+                expectedDirectory2.DeleteFile(file);
             }
+
+            AssertFilesAreEqual(azureDirectory1, expectedDirectory1, "#2 shard1| ");
+            AssertFilesAreEqual(azureDirectory2, expectedDirectory2, "#2 shard2| ");
         }
 
         [TestMethod]
         public void TestReadAndWrite_WritingTwoConsecutiveTimes()
         {
-
-            var connectionString = _connectionString ?? "UseDevelopmentStorage=true";
-            string containerName = $"{_containerRoot}/{nameof(TestReadAndWrite_WritingTwoConsecutiveTimes)}";
-            var blobClient = new BlobServiceClient(connectionString);
-            var container = blobClient.GetBlobContainerClient(containerName);
-
-            var azureDirectory = new AzureDirectory(connectionString, containerName);
-
-            var (dog, cat, car) = InitializeCatalog(azureDirectory, 500);
-            var (dog1, cat1, car1) = InitializeCatalog(azureDirectory, 500);
+            string containerName = $"{_containerRoot}/{GetMethodName()}";
+            var (azureDirectory, expectedDirectory) = Arrange(containerName);
+            
+            var (dog, cat, car) = InitializeCatalog(azureDirectory, 500, expectedDirectory);
+            var (dog1, cat1, car1) = InitializeCatalog(azureDirectory, 500, expectedDirectory);
             dog += dog1;
             cat += cat1;
             car += car1;
@@ -169,20 +165,19 @@ namespace Lucene.Net.Store.Azure.Tests
             {
                 Trace.TraceInformation("Tests failed:\n{0}", x);
             }
+
+            AssertFilesAreEqual(azureDirectory, expectedDirectory);
         }
 
         [TestMethod]
         public void TestReadAndWriteWithSubDirectory_WritingTwoConsecutiveTimes()
         {
-            var connectionString = _connectionString ?? "UseDevelopmentStorage=true";
-            string containerName = $"{_containerRoot}/{nameof(TestReadAndWriteWithSubDirectory_WritingTwoConsecutiveTimes)}";
-            var blobClient = new BlobServiceClient(connectionString);
-            var container = blobClient.GetBlobContainerClient(containerName);
+            string containerName =
+                $"{_containerRoot}/{GetMethodName()}";
+            var (azureDirectory, expectedDirectory) = Arrange($"{containerName}/subdirectory");
 
-            var azureDirectory = new AzureDirectory(connectionString, $"{containerName}/subdirectory");
-
-            var (dog, cat, car) = InitializeCatalog(azureDirectory, 500);
-            var (dog1, cat1, car1) = InitializeCatalog(azureDirectory, 500);
+            var (dog, cat, car) = InitializeCatalog(azureDirectory, 500, expectedDirectory);
+            var (dog1, cat1, car1) = InitializeCatalog(azureDirectory, 500, expectedDirectory);
             dog += dog1;
             cat += cat1;
             car += car1;
@@ -204,37 +199,40 @@ namespace Lucene.Net.Store.Azure.Tests
             {
                 Trace.TraceInformation("Tests failed:\n{0}", x);
             }
+
+            AssertFilesAreEqual(azureDirectory, expectedDirectory);
         }
 
         [TestMethod]
         public void TestReadAndWriteWithTwoShardDirectories_WritingTwoConsecutiveTimes()
         {
-            var connectionString = _connectionString ?? "UseDevelopmentStorage=true";
-            string containerName = $"{_containerRoot}/{nameof(TestReadAndWriteWithSubDirectory_WritingTwoConsecutiveTimes)}";
-            var blobClient = new BlobServiceClient(connectionString);
-            var container = blobClient.GetBlobContainerClient(containerName);
+            string containerName = $"{_containerRoot}/{GetMethodName()}";
 
-            var azureDirectory1 = new AzureDirectory(connectionString, $"{containerName}/shard1");
-            var (dog, cat, car) = InitializeCatalog(azureDirectory1, 500);
-            var (dog1, cat1, car1) = InitializeCatalog(azureDirectory1, 500);
+            var (azureDirectory1, expectedDirectory1) = Arrange($"{containerName}/shard1");
+            var (azureDirectory2, expectedDirectory2) = Arrange($"{containerName}/shard2");
+            
+            var (dog, cat, car) = InitializeCatalog(azureDirectory1, 500, expectedDirectory1);
+            var (dog1, cat1, car1) = InitializeCatalog(azureDirectory1, 500, expectedDirectory1);
             dog += dog1;
             cat += cat1;
             car += car1;
 
-            var azureDirectory2 = new AzureDirectory(connectionString, $"{containerName}/shard2");
-            var (dog2, cat2, car2) = InitializeCatalog(azureDirectory2, 250);
-            var (dog3, cat3, car3) = InitializeCatalog(azureDirectory2, 250);
+            var (dog2, cat2, car2) = InitializeCatalog(azureDirectory2, 250, expectedDirectory2);
+            var (dog3, cat3, car3) = InitializeCatalog(azureDirectory2, 250, expectedDirectory2);
             dog2 += dog3;
             cat2 += cat3;
             car2 += car3;
 
             ValidateDirectory(azureDirectory1, dog, cat, car);
             ValidateDirectory(azureDirectory2, dog2, cat2, car2);
+            AssertFilesAreEqual(azureDirectory1, expectedDirectory1, "#1 shard1| ");
+            AssertFilesAreEqual(azureDirectory2, expectedDirectory2, "#1 shard2| ");
 
             // delete all azureDirectory1 blobs
             foreach (string file in azureDirectory1.ListAll())
             {
                 azureDirectory1.DeleteFile(file);
+                expectedDirectory1.DeleteFile(file);
             }
 
             ValidateDirectory(azureDirectory2, dog2, cat2, car2);
@@ -242,7 +240,12 @@ namespace Lucene.Net.Store.Azure.Tests
             foreach (string file in azureDirectory2.ListAll())
             {
                 azureDirectory2.DeleteFile(file);
+                expectedDirectory2.DeleteFile(file);
             }
+            
+            AssertFilesAreEqual(azureDirectory1, expectedDirectory1, "#2 shard1| ");
+            AssertFilesAreEqual(azureDirectory2, expectedDirectory2, "#2 shard2| ");
+
         }
 
         [TestMethod]
@@ -255,10 +258,9 @@ namespace Lucene.Net.Store.Azure.Tests
                 "_0.cfs",
                 "_0.si",
                 "segments.gen",
-                "segments_1",
-                "write.lock"
+                "segments_1"
             });
-            string containerName = $"{_containerRoot}/{nameof(CanListAllFileNames_InFlatContainer)}";
+            string containerName = $"{_containerRoot}/{GetMethodName()}";
 
             TestListingFilesOfDirectory(containerName, expectedFileNames);
         }
@@ -273,10 +275,9 @@ namespace Lucene.Net.Store.Azure.Tests
                 "_0.cfs",
                 "_0.si",
                 "segments.gen",
-                "segments_1",
-                "write.lock"
+                "segments_1"
             });
-            string containerName = $"{_containerRoot}/{nameof(CanListAllFileNames_InLevel1Subdirectory)}";
+            string containerName = $"{_containerRoot}/{GetMethodName()}";
             TestListingFilesOfDirectory($"{containerName}/shard1", expectedFileNames);
         }
 
@@ -290,10 +291,9 @@ namespace Lucene.Net.Store.Azure.Tests
                 "_0.cfs",
                 "_0.si",
                 "segments.gen",
-                "segments_1",
-                "write.lock"
+                "segments_1"
             });
-            string containerName = $"{_containerRoot}/{nameof(CanListAllFileNames_InLevel2Subdirectory)}";
+            string containerName = $"{_containerRoot}/{GetMethodName()}";
             TestListingFilesOfDirectory($"{containerName}/shard1/level2", expectedFileNames);
         }
 
@@ -310,10 +310,9 @@ namespace Lucene.Net.Store.Azure.Tests
                "_1.cfs",
                "_1.si",
                "segments.gen",
-               "segments_2",
-               "write.lock",
+               "segments_2"
             });
-            string containerName = $"{_containerRoot}/{nameof(CanListAllFileNames_InFlatContainer_After2Writes)}";
+            string containerName = $"{_containerRoot}/{GetMethodName()}";
             TestListingFilesOfDirectory(containerName, expectedFileNames, numberOfSimulatedIndexWrites: 2);
         }
 
@@ -330,10 +329,9 @@ namespace Lucene.Net.Store.Azure.Tests
                 "_1.cfs",
                 "_1.si",
                 "segments.gen",
-                "segments_2",
-                "write.lock",
+                "segments_2"
             });
-            string containerName = $"{_containerRoot}/{nameof(CanListAllFileNames_InLevel1Subdirectory_After2Writes)}";
+            string containerName = $"{_containerRoot}/{GetMethodName()}";
             TestListingFilesOfDirectory($"{containerName}/shard1", expectedFileNames, numberOfSimulatedIndexWrites: 2);
         }
 
@@ -350,13 +348,17 @@ namespace Lucene.Net.Store.Azure.Tests
                 "_1.cfs",
                 "_1.si",
                 "segments.gen",
-                "segments_2",
-                "write.lock",
+                "segments_2"
             });
-            string containerName = $"{_containerRoot}/{nameof(CanListAllFileNames_InLevel2Subdirectory_After2Writes)}";
+            string containerName = $"{_containerRoot}/{GetMethodName()}";
             TestListingFilesOfDirectory($"{containerName}/shard1/level2", expectedFileNames, numberOfSimulatedIndexWrites: 2);
         }
 
+        private string GetMethodName([CallerMemberName] string methodName = null)
+        {
+            return methodName;
+        }
+        
         private void TestListingFilesOfDirectory(string containerName, string expectedFileNames, int numberOfSimulatedIndexWrites = 1)
         {
             var connectionString = _connectionString ?? "UseDevelopmentStorage=true";
@@ -377,6 +379,64 @@ namespace Lucene.Net.Store.Azure.Tests
             var actualFileNames = string.Join("\n", actual);
             Assert.AreEqual(expectedFileNames, actualFileNames);
         }
+        
+        private void AssertFilesAreEqual(AzureDirectory azureDirectory, FSDirectory expcetedDirectory, string messagePrefix = null)
+        {
+            var cacheDirectory = azureDirectory.CacheDirectory;
+            var cachedFiles = cacheDirectory.ListAll().OrderBy(x => x).ToList();
+            var azureFiles = azureDirectory.ListAll().OrderBy(x => x).ToList();
+            var expectedFiles = expcetedDirectory.ListAll().OrderBy(x => x).ToList();
+
+            var prefix = messagePrefix ?? string.Empty;
+            
+            Assert.AreEqual(azureFiles.Count, cachedFiles.Intersect(azureFiles).Count(), $"{prefix}files contained in azure directory must exist in cache");
+            Assert.AreEqual(string.Join("\n", azureFiles), string.Join("\n",expectedFiles), $"{prefix}files contained in azure directory and expected directory differ");
+
+            var errors = new List<string>();
+            
+            foreach (var f in azureFiles.FilterSiFiles())
+            {
+                using var actualFile = azureDirectory.OpenInput(f, new IOContext());
+                using var expectedFile = expcetedDirectory.OpenInput(f, new IOContext());
+                using var cachedFile = cacheDirectory.OpenInput(f, new IOContext());
+                
+                byte[] actualData = new byte[actualFile.Length];
+                actualFile.ReadBytes(actualData, 0, (int)actualFile.Length);
+                byte[] expectedData = new byte[expectedFile.Length];
+                expectedFile.ReadBytes(expectedData, 0, (int)expectedFile.Length);
+                byte[] cachedData = new byte[cachedFile.Length];
+                cachedFile.ReadBytes(cachedData, 0, (int)cachedFile.Length);
+                
+                if (expectedFile.Length != actualFile.Length)
+                    errors.Add($"{prefix}the FSDirectory and azure files '{f}' differ in length (actual: {actualFile.Length}, expected: {expectedFile.Length})");
+                else if(!actualData.SequenceEqual(expectedData))
+                    errors.Add($"{prefix}the FSDirectory and azure files '{f}' differ in their content (actual MD5: {Convert.ToBase64String(MD5.HashData(actualData))}, expected MD5: {Convert.ToBase64String(MD5.HashData(expectedData))})");
+                
+                if (cachedFile.Length != actualFile.Length)
+                    errors.Add($"{prefix}the cached- and azure files '{f}' differ in length (actual: {actualFile.Length}, cachedFile: {cachedFile.Length})");
+                else if(!actualData.SequenceEqual(cachedData))
+                    errors.Add($"{prefix}the cached- and azure files '{f}' differ in their content (actual MD5: {Convert.ToBase64String(MD5.HashData(actualData))}, cached MD5: {Convert.ToBase64String(MD5.HashData(cachedData))})");
+            }
+
+            Assert.IsTrue(errors.Count == 0, string.Join("\n", errors));
+        }
+
+        private (AzureDirectory azureDirectory, FSDirectory directory) Arrange(string containerName)
+        {
+            // create azure dir
+            var connectionString = _connectionString ?? "UseDevelopmentStorage=true";
+            var blobClient = new BlobServiceClient(connectionString);
+            var container = blobClient.GetBlobContainerClient(containerName);
+            var azureDirectory = new AzureDirectory(connectionString, containerName);
+
+            // create local dir
+            var directory = Path.Combine(Environment.CurrentDirectory, containerName.Replace("/", "\\"));
+            var dirInfo = new DirectoryInfo(directory);
+            if (dirInfo.Exists)
+                dirInfo.Delete(true);
+            dirInfo.Create();
+            return (azureDirectory, FSDirectory.Open(dirInfo));
+        }
 
         private static void ValidateDirectory(AzureDirectory azureDirectory2, Int32 dog2, Int32 cat2, Int32 car2)
         {
@@ -395,7 +455,7 @@ namespace Lucene.Net.Store.Azure.Tests
             Trace.TraceInformation("Tests passsed");
         }
 
-        private static (int dog, int cat, int car) InitializeCatalog(AzureDirectory azureDirectory, int docs)
+        private static (int dog, int cat, int car) InitializeCatalog(AzureDirectory azureDirectory, int docs, FSDirectory referenceDirectory = null)
         {
             var indexWriterConfig = new IndexWriterConfig(
                 Lucene.Net.Util.LuceneVersion.LUCENE_48,
@@ -404,24 +464,40 @@ namespace Lucene.Net.Store.Azure.Tests
             var dog = 0;
             var cat = 0;
             var car = 0;
-            using (var indexWriter = new IndexWriter(azureDirectory, indexWriterConfig))
+            
+            // if we are passed a reference directory, we also write to it so we can compare the files later
+            var referenceIndexWriter = referenceDirectory != null 
+                ? new IndexWriter(referenceDirectory, new IndexWriterConfig(Lucene.Net.Util.LuceneVersion.LUCENE_48, new StandardAnalyzer(Lucene.Net.Util.LuceneVersion.LUCENE_48)))
+                : null;
+            
+            try
             {
-
-                for (var iDoc = 0; iDoc < docs; iDoc++)
+                using (var indexWriter = new IndexWriter(azureDirectory, indexWriterConfig))
                 {
-                    var bodyText = GeneratePhrase(40);
-                    var doc = new Document {
-                        new TextField("id", DateTime.Now.ToFileTimeUtc() + "-" + iDoc, Field.Store.YES),
-                        new TextField("Title", GeneratePhrase(10), Field.Store.YES),
-                        new TextField("Body", bodyText, Field.Store.YES)
-                    };
-                    dog += bodyText.Contains(" dog ") ? 1 : 0;
-                    cat += bodyText.Contains(" cat ") ? 1 : 0;
-                    car += bodyText.Contains(" car ") ? 1 : 0;
-                    indexWriter.AddDocument(doc);
-                }
 
-                Trace.TraceInformation("Total docs is {0}, {1} dog, {2} cat, {3} car", indexWriter.NumDocs, dog, cat, car);
+                    for (var iDoc = 0; iDoc < docs; iDoc++)
+                    {
+                        var bodyText = GeneratePhrase(40);
+                        var doc = new Document
+                        {
+                            new TextField("id", DateTime.Now.ToFileTimeUtc() + "-" + iDoc, Field.Store.YES),
+                            new TextField("Title", GeneratePhrase(10), Field.Store.YES),
+                            new TextField("Body", bodyText, Field.Store.YES)
+                        };
+                        dog += bodyText.Contains(" dog ") ? 1 : 0;
+                        cat += bodyText.Contains(" cat ") ? 1 : 0;
+                        car += bodyText.Contains(" car ") ? 1 : 0;
+                        indexWriter.AddDocument(doc);
+                        referenceIndexWriter?.AddDocument(doc);
+                    }
+
+                    Trace.TraceInformation("Total docs is {0}, {1} dog, {2} cat, {3} car", indexWriter.NumDocs, dog,
+                        cat, car);
+                }
+            }
+            finally
+            {
+                referenceIndexWriter?.Dispose();
             }
 
             return (dog, cat, car);
@@ -455,6 +531,18 @@ namespace Lucene.Net.Store.Azure.Tests
             }
             return phrase.ToString();
         }
+    }
 
+    internal static class Extensions
+    {
+        /// <summary>
+        /// When comparing file contents, we must omit *.si files since they contain a timestamp and may therefore differ even if they are just fine!
+        /// </summary>
+        /// <param name="fileNames"></param>
+        /// <returns></returns>
+        internal static IEnumerable<string> FilterSiFiles(this IEnumerable<string> fileNames)
+        {
+            return fileNames.Where(f => !f.EndsWith(".si"));
+        }
     }
 }

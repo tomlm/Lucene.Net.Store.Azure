@@ -14,12 +14,13 @@ namespace Lucene.Net.Store.Azure
     /// </summary>
     public class AzureLock : Lock
     {
-        private string _lockFile;
+        private string _lockFile, _lockName;
         private AzureDirectory _azureDirectory;
         private string _leaseid;
 
         public AzureLock(string lockFile, AzureDirectory directory)
         {
+            _lockName = lockFile;
             _lockFile = directory.GetBlobName(lockFile);
             _azureDirectory = directory;
         }
@@ -118,11 +119,14 @@ namespace Lucene.Net.Store.Azure
             var blob = _azureDirectory.BlobContainer.GetBlobClient(_lockFile);
             try
             {
-                blob.GetBlobLeaseClient(_leaseid).Break();
+                if (!String.IsNullOrEmpty(_leaseid))
+                    blob.GetBlobLeaseClient(_leaseid).Release();
+                // blob.GetBlobLeaseClient(_leaseid).Break();
             }
             catch (RequestFailedException)
             {
             }
+            blob.Delete();
             _leaseid = null;
         }
 
@@ -152,8 +156,7 @@ namespace Lucene.Net.Store.Azure
             Debug.WriteLine($"{_azureDirectory.Name} AzureLock:Release({_lockFile}) {_leaseid}");
             if (!String.IsNullOrEmpty(_leaseid))
             {
-                var blob = _azureDirectory.BlobContainer.GetBlobClient(_lockFile);
-                blob.GetBlobLeaseClient(_leaseid).Release();
+                _azureDirectory.ClearLock(_lockName);
                 if (_renewTimer != null)
                 {
                     _renewTimer.Dispose();
