@@ -7,17 +7,13 @@ using System.Linq;
 
 namespace Lucene.Net.Store.Azure
 {
-    public class AzureDirectory : Directory
+    public class AzureDirectory : BaseDirectory
     {
         private BlobServiceClient _blobClient;
         private readonly string containerName;
         private readonly string subDirectory;
 
-        private readonly Dictionary<string, AzureLock> _locks = new Dictionary<string, AzureLock>();
-        private LockFactory _lockFactory = new NativeFSLockFactory();
         private readonly Dictionary<string, AzureIndexOutput> _nameCache = new Dictionary<string, AzureIndexOutput>();
-
-        public override LockFactory LockFactory => _lockFactory;
 
         public AzureDirectory(string storageAccount) :
             this(storageAccount, null, null)
@@ -46,7 +42,7 @@ namespace Lucene.Net.Store.Azure
         public AzureDirectory(
             string storageAccount,
             string catalog,
-            Directory cacheDirectory)
+            Directory cacheDirectory) 
         {
             if (storageAccount == null)
                 throw new ArgumentNullException("storageAccount");
@@ -61,6 +57,9 @@ namespace Lucene.Net.Store.Azure
 
             _blobClient = new BlobServiceClient(storageAccount);
             _initCacheDirectory(cacheDirectory);
+            
+            // default lock factory is AzureLockFactory
+            SetLockFactory(new AzureLockFactory(this));
         }
 
         /// <summary>
@@ -114,9 +113,11 @@ namespace Lucene.Net.Store.Azure
         public override string[] ListAll()
         {
             var prefix = string.IsNullOrEmpty(this.subDirectory) ? null : this.subDirectory + "/";
+            
             return BlobContainer.GetBlobsByHierarchy(delimiter: "/", prefix: prefix)
                 .Where(x => x.IsBlob)
-                .Select(x => x.Blob.Name.Split('/').Last()).ToArray();
+                .Select(x => x.Blob.Name.Split('/').Last())
+                .ToArray();
         }
 
         /// <summary>Returns true if a file with the given name exists. </summary>
@@ -188,42 +189,12 @@ namespace Lucene.Net.Store.Azure
             }
         }
 
-        /// <summary>Construct a {@link Lock}.</summary>
-        /// <param name="name">the name of the lock file
-        /// </param>
-        public override Lock MakeLock(string name)
-        {
-            lock (_locks)
-            {
-                if (!_locks.ContainsKey(name))
-                {
-                    _locks.Add(name, new AzureLock(name, this));
-                }
-                return _locks[name];
-            }
-        }
-
-        public override void ClearLock(string name)
-        {
-            lock (_locks)
-            {
-                if (_locks.ContainsKey(name))
-                {
-                    _locks[name].BreakLock();
-                }
-            }
-        }
 
         /// <summary>Closes the store. </summary>
         protected override void Dispose(bool disposing)
         {
             BlobContainer = null;
             _blobClient = null;
-        }
-
-        public override void SetLockFactory(LockFactory lockFactory)
-        {
-            _lockFactory = lockFactory;
         }
 
         /// <summary>Creates a new, empty file in the directory with the given name.
