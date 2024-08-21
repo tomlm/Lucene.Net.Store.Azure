@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>4.8.3-beta016</Version>
+    <Version>4.8.4-beta016</Version>
     <Authors>Tom Laird-McConnell</Authors>
     <Title>Azure blob storage for Lucene.net</Title>
     <Summary>This project allows you to store Lucene Indexes in by Azure BlobStorage.</Summary>
@@ -11,8 +11,8 @@
     <RepositoryUrl>https://github.com/tomlm/Lucene.Net.Store.Azure</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MS-PL</PackageLicenseExpression>
-    <AssemblyVersion>4.8.3.16</AssemblyVersion>
-    <FileVersion>4.8.3.16</FileVersion>
+    <AssemblyVersion>4.8.4.16</AssemblyVersion>
+    <FileVersion>4.8.4.16</FileVersion>
     <PackageReleaseNotes>This is a release with dependency on Lucene.Net 4.8.0.beta 0016</PackageReleaseNotes>
     <PackageIconUrl>https://raw.githubusercontent.com/tomlm/Lucene.Net.Store.Azure/master/icon.png</PackageIconUrl>
     <PackageIcon>icon.png</PackageIcon>
