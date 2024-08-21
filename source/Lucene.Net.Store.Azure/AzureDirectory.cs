@@ -140,6 +140,7 @@ namespace Lucene.Net.Store.Azure
             var blobName = GetBlobName(name);
             var blob = BlobContainer.GetBlobClient(blobName);
             blob.DeleteIfExists();
+            
         }
 
         /// <summary>Returns the length of a file in the directory. </summary>
