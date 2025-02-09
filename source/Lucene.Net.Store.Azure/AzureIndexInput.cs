@@ -17,7 +17,6 @@ namespace Lucene.Net.Store.Azure
     {
         private string _name;
         private AzureDirectory _azureDirectory;
-        private BlobContainerClient _blobContainer;
         private BlobClient _blob;
         private IndexInput _indexInput;
         private Mutex _fileMutex;
@@ -34,7 +33,6 @@ namespace Lucene.Net.Store.Azure
             _fileMutex.WaitOne();
             try
             {
-                _blobContainer = azureDirectory.BlobContainer;
                 _blob = blob;
                 bool fileNeeded = false;
                 if (!CacheDirectory.FileExists(name))
@@ -109,6 +107,20 @@ namespace Lucene.Net.Store.Azure
             }
         }
 
+        private AzureIndexInput(AzureIndexInput clone)
+            : base(clone._name)
+        {
+#if FULLDEBUG
+            Debug.WriteLine($"{clone._azureDirectory} clone {clone._name} ");
+#endif
+            _name = clone._name;
+            _azureDirectory = clone._azureDirectory;
+            _blob = clone._blob;
+            _fileMutex = BlobMutexManager.GrabMutex(_name);
+            _indexInput = CacheDirectory.OpenInput(_name, IOContext.DEFAULT);
+            Seek(clone.Position);
+        }
+
         public Lucene.Net.Store.Directory CacheDirectory { get { return _azureDirectory.CacheDirectory; } }
 
         public override byte ReadByte()
@@ -141,7 +153,6 @@ namespace Lucene.Net.Store.Azure
                 _indexInput.Dispose();
                 _indexInput = null;
                 _azureDirectory = null;
-                _blobContainer = null;
                 _blob = null;
                 GC.SuppressFinalize(this);
             }
@@ -153,9 +164,7 @@ namespace Lucene.Net.Store.Azure
 
         public override Object Clone()
         {
-            var clone = new AzureIndexInput(this._azureDirectory, this._name, this._blob);
-            clone.Seek(this.Position);
-            return clone;
+            return new AzureIndexInput(this);
         }
     }
 }
