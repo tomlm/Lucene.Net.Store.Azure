@@ -23,14 +23,14 @@ jobs:
           dotnet-version: 8.0.x
   
       - name: Restore dependencies
-        run: dotnet restore source/AzureDirectory
+        run: dotnet restore source/Lucene.Net.Store.Azure
 
       - name: Build
-        run: dotnet build source/AzureDirectory -c Release --no-restore 
+        run: dotnet build source/Lucene.Net.Store.Azure -c Release --no-restore 
   
       - name: dotnet pack 
         run: |
-          dotnet pack --no-build ./source/AzureDirectory -c Release -o packages --include-symbols --property WarningLevel=0
+          dotnet pack --no-build ./source/Lucene.Net.Store.Azure -c Release -o packages --include-symbols --property WarningLevel=0
 
       - name: Publish NuGet and symbols
         id: nuget-push
