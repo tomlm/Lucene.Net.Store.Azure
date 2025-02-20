@@ -117,8 +117,7 @@ namespace Lucene.Net.Store.Azure
             _azureDirectory = clone._azureDirectory;
             _blob = clone._blob;
             _fileMutex = BlobMutexManager.GrabMutex(_name);
-            _indexInput = CacheDirectory.OpenInput(_name, IOContext.DEFAULT);
-            Seek(clone.Position);
+            _indexInput = clone._indexInput.Clone() as IndexInput;
         }
 
         public Lucene.Net.Store.Directory CacheDirectory { get { return _azureDirectory.CacheDirectory; } }
