@@ -86,6 +86,9 @@ namespace Lucene.Net.Store.Azure
 
             _blobClient = blobServiceClient;
             _initCacheDirectory(cacheDirectory);
+
+            // default lock factory is AzureLockFactory
+            SetLockFactory(new AzureLockFactory(this));
         }
 
         public BlobContainerClient BlobContainer { get; private set; }
