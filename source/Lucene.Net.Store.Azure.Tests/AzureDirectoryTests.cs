@@ -79,7 +79,35 @@ namespace Lucene.Net.Store.Azure.Tests
         public void TestReadAndWriteWithSubDirectory()
         {
             string containerName = $"{_containerRoot}/{GetMethodName()}";
-            var (azureDirectory, expectedDirectory) = Arrange($"{containerName}/subdirectory");
+            var (azureDirectory, expectedDirectory) = Arrange($"{containerName}/SubDirectory");
+            var (dog, cat, car) = InitializeCatalog(azureDirectory, 1000, expectedDirectory);
+
+            try
+            {
+
+                var ireader = DirectoryReader.Open(azureDirectory);
+                var searcher = new IndexSearcher(ireader);
+                var searchForPhrase = SearchForPhrase(searcher, "dog");
+                Assert.AreEqual(dog, searchForPhrase);
+                searchForPhrase = SearchForPhrase(searcher, "cat");
+                Assert.AreEqual(cat, searchForPhrase);
+                searchForPhrase = SearchForPhrase(searcher, "car");
+                Assert.AreEqual(car, searchForPhrase);
+                Trace.TraceInformation("Tests passsed");
+            }
+            catch (Exception x)
+            {
+                Trace.TraceInformation("Tests failed:\n{0}", x);
+            }
+
+            AssertFilesAreEqual(azureDirectory, expectedDirectory);
+        }
+
+        [TestMethod]
+        public void TestReadAndWriteWithSubDirectoryMultiCase()
+        {
+            string containerName = $"{_containerRoot}/{GetMethodName()}";
+            var (azureDirectory, expectedDirectory) = Arrange($"{containerName}/SubDirectory", multiCasePath: true);
             var (dog, cat, car) = InitializeCatalog(azureDirectory, 1000, expectedDirectory);
 
             try
@@ -435,6 +463,56 @@ namespace Lucene.Net.Store.Azure.Tests
             TestListingFilesOfDirectory($"{containerName}/shard1/level2", expectedFileNames, numberOfSimulatedIndexWrites: 2);
         }
 
+        [TestMethod]
+        public void TestConstructor_ConnectionString()
+        {
+            var connectionString = "UseDevelopmentStorage=true";
+
+            var ad = new AzureDirectory(connectionString);
+            Assert.AreEqual("lucene", ad.Name);
+        }
+
+        [TestMethod]
+        public void TestConstructor_ContainerName()
+        {
+            var connectionString = "UseDevelopmentStorage=true";
+            string containerName = $"Container/SubFolder";
+
+            var ad = new AzureDirectory(connectionString, containerName);
+            Assert.AreEqual("container/subfolder", ad.Name);
+            
+            ad = new AzureDirectory(connectionString, containerName, multiCasePath: true);
+            Assert.AreEqual("container/SubFolder", ad.Name);
+        }
+
+        [TestMethod]
+        public void TestConstructor_CacheDirectory()
+        {
+            var connectionString = "UseDevelopmentStorage=true";
+            string containerName = $"Container/SubFolder";
+
+            var ad = new AzureDirectory(connectionString, containerName, new RAMDirectory());
+            Assert.AreEqual("container/subfolder", ad.Name);
+
+            ad = new AzureDirectory(connectionString, containerName, new RAMDirectory(), multiCasePath: true);
+            Assert.AreEqual("container/SubFolder", ad.Name);
+        }
+
+        [TestMethod]
+        public void TestConstructor_BlobServiceClient()
+        {
+            string containerName = $"Container/SubFolder";
+            var connectionString = "UseDevelopmentStorage=true";
+            var blobClient = new BlobServiceClient(connectionString);
+            var container = blobClient.GetBlobContainerClient(containerName);
+
+            var ad = new AzureDirectory(blobClient, containerName, new RAMDirectory());
+            Assert.AreEqual("container/subfolder", ad.Name);
+
+            ad = new AzureDirectory(blobClient, containerName, new RAMDirectory(), multiCasePath: true);
+            Assert.AreEqual("container/SubFolder", ad.Name);
+        }
+
         private string GetMethodName([CallerMemberName] string methodName = null)
         {
             return methodName;
@@ -502,13 +580,13 @@ namespace Lucene.Net.Store.Azure.Tests
             Assert.IsTrue(errors.Count == 0, string.Join("\n", errors));
         }
 
-        private (AzureDirectory azureDirectory, FSDirectory directory) Arrange(string containerName)
+        private (AzureDirectory azureDirectory, FSDirectory directory) Arrange(string containerName, bool multiCasePath=false)
         {
             // create azure dir
             var connectionString = _connectionString ?? "UseDevelopmentStorage=true";
             var blobClient = new BlobServiceClient(connectionString);
             var container = blobClient.GetBlobContainerClient(containerName);
-            var azureDirectory = new AzureDirectory(connectionString, containerName);
+            var azureDirectory = new AzureDirectory(connectionString, containerName, multiCasePath: multiCasePath);
 
             // create local dir
             var directory = Path.Combine(Environment.CurrentDirectory, containerName.Replace("/", "\\"));

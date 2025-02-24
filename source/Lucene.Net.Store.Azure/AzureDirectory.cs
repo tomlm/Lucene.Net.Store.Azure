@@ -15,21 +15,33 @@ namespace Lucene.Net.Store.Azure
 
         private readonly Dictionary<string, AzureIndexOutput> _nameCache = new Dictionary<string, AzureIndexOutput>();
 
+        /// <summary>
+        /// Create AzureDirectory with just storagaccount string
+        /// </summary>
+        /// <param name="storageAccount"></param>
         public AzureDirectory(string storageAccount) :
-            this(storageAccount, null, null)
+            this(storageAccount, 
+                catalog:null, 
+                cacheDirectory: null, 
+                multiCasePath: false)
         {
         }
 
         /// <summary>
         /// Create AzureDirectory
         /// </summary>
-        /// <param name="storageAccount">staorage account to use</param>
-        /// <param name="catalog">name of catalog (folder in blob storage, can have subfolders like foo/bar)</param>
+        /// <param name="storageAccount">storage account to use</param>
+        /// <param name="catalog">name of catalog (container in blobstorage, can have subfolders like foo/bar)</param>
+        /// <param name="multiCasePath">allow subdirectories to be multi-case </param>
         /// <remarks>Default local cache is to use file system in user/appdata/AzureDirectory/Catalog</remarks>
         public AzureDirectory(
             string storageAccount,
-            string catalog)
-            : this(storageAccount, catalog, null)
+            string catalog,
+            bool multiCasePath = false)
+            : this(storageAccount, 
+                  catalog: catalog, 
+                  cacheDirectory: null, 
+                  multiCasePath: multiCasePath)
         {
         }
 
@@ -37,65 +49,61 @@ namespace Lucene.Net.Store.Azure
         /// Create an AzureDirectory
         /// </summary>
         /// <param name="storageAccount">storage account to use</param>
-        /// <param name="catalog">name of catalog (folder in blob storage, can have subfolders like foo/bar)</param>
+        /// <param name="catalog">name of catalog (container in blobstorage, can have subfolders like foo/bar)</param>
         /// <param name="cacheDirectory">local Directory object to use for local cache</param>
+        /// <param name="multiCasePath">allow subdirectories to be multi-case </param>
         public AzureDirectory(
             string storageAccount,
             string catalog,
-            Directory cacheDirectory) 
+            Directory cacheDirectory,
+            bool multiCasePath = false) 
+            : this(new BlobServiceClient(storageAccount), 
+                  catalog: catalog, 
+                  cacheDirectory: cacheDirectory, 
+                  multiCasePath: multiCasePath)
         {
-            if (storageAccount == null)
-                throw new ArgumentNullException("storageAccount");
-
-            if (string.IsNullOrEmpty(catalog))
-                Name = "lucene";
-            else
-                Name = catalog.ToLower();
-
-            this.containerName = Name.Split('/').First();
-            this.subDirectory = String.Join("/", Name.Split('/').Skip(1));
-
-            _blobClient = new BlobServiceClient(storageAccount);
-            _initCacheDirectory(cacheDirectory);
-            
-            // default lock factory is AzureLockFactory
-            SetLockFactory(new AzureLockFactory(this));
         }
 
         /// <summary>
         /// Create an AzureDirectory
         /// </summary>
         /// <param name="blobServiceClient">BlobServiceClient to use</param>
-        /// <param name="catalog">name of catalog (folder in blob storage, can have subfolders like foo/bar)</param>
+        /// <param name="catalog">name of catalog (container in blobstorage, can have subfolders like foo/bar)</param>
         /// <param name="cacheDirectory">local Directory object to use for local cache</param>
+        /// <param name="multiCasePath">allow subdirectories to be multi-case</param>
         public AzureDirectory(
             BlobServiceClient blobServiceClient,
             string catalog,
-            Directory cacheDirectory)
+            Directory cacheDirectory,
+            bool multiCasePath = false)
         {
             if (blobServiceClient == null)
                 throw new ArgumentNullException("blobServiceClient");
 
             if (string.IsNullOrEmpty(catalog))
-                Name = "lucene";
-            else
-                Name = catalog.ToLower();
+                catalog = "lucene";
 
-            this.containerName = Name.Split('/').First();
-            this.subDirectory = String.Join("/", Name.Split('/').Skip(1));
+            this.containerName = catalog.Split('/').First().ToLower();
+            this.subDirectory = String.Join("/", catalog.Split('/').Skip(1));
+            if (multiCasePath == false)
+                this.subDirectory = this.subDirectory.ToLower();
+            this.Name = $"{containerName}/{subDirectory}".TrimEnd('/');
 
             _blobClient = blobServiceClient;
             _initCacheDirectory(cacheDirectory);
+
+            // default lock factory is AzureLockFactory
+            SetLockFactory(new AzureLockFactory(this));
         }
 
         public BlobContainerClient BlobContainer { get; private set; }
 
-        public string Name { get; set; }
+        public string Name { get; private set; }
 
         /// <summary>
         /// If set, this is the directory object to use as the local cache
         /// </summary>
-        public Directory CacheDirectory { get; set; }
+        public Directory CacheDirectory { get; private set; }
 
         public void ClearCache()
         {
