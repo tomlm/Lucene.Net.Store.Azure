@@ -1,4 +1,6 @@
 # Lucene.Net.Store.Azure (Full Text Indexing for Azure)
+[![BuildAndRunTests](https://github.com/tomlm/Lucene.Net.Store.Azure/workflows/BuildAndRunTests/badge.svg)](https://github.com/tomlm/Lucene.Net.Store.Azure/actions/workflows/BuildAndRunTests.yml)
+[![NuGet](https://img.shields.io/nuget/v/Lucene.Net.Store.Azure.svg)](https://www.nuget.org/packages/Lucene.Net.Store.Azure/)
 
 ## Project description
 This project allows you to create Lucene Indexes via a Lucene Directory object which uses Azure BlobStorage for persistent storage. 
