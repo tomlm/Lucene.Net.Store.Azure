@@ -43,9 +43,8 @@ namespace Lucene.Net.Store.Azure
                 {
                     try
                     {
-                        var blobProperties = blob.GetProperties();
                         long cachedLength = CacheDirectory.FileLength(name);
-                        long blobLength = blobProperties?.Value?.ContentLength ?? 0;
+                        long blobLength = _azureDirectory.GetCachedMetadata(name)?.ContentLength ?? 0;
                         if (cachedLength != blobLength)
                             fileNeeded = true;
                     }

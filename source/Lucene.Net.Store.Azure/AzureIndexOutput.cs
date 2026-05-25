@@ -66,6 +66,8 @@ namespace Lucene.Net.Store.Azure
                     Debug.WriteLine($"{_azureDirectory.Name} PUT {_name} bytes to {blobStream.Length} in cloud");
                 }
 
+                _azureDirectory.UpdateCacheEntry(_name, originalLength);
+
 #if FULLDEBUG
                 Debug.WriteLine($"{_azureDirectory.Name} CLOSED WRITESTREAM {_name}");
 #endif

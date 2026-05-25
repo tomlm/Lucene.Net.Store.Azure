@@ -1,9 +1,12 @@
 ﻿//    License: Microsoft Public License (Ms-PL) 
+using Azure;
 using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 
 namespace Lucene.Net.Store.Azure
 {
@@ -15,14 +18,18 @@ namespace Lucene.Net.Store.Azure
 
         private readonly Dictionary<string, AzureIndexOutput> _nameCache = new Dictionary<string, AzureIndexOutput>();
 
+        // Blob metadata cache — refreshed by ListAll(); lazily populated on first access
+        private Dictionary<string, BlobMetadata> _blobMetadataCache;
+        private readonly object _cacheLock = new object();
+
         /// <summary>
         /// Create AzureDirectory with just storagaccount string
         /// </summary>
         /// <param name="storageAccount"></param>
         public AzureDirectory(string storageAccount) :
-            this(storageAccount, 
-                catalog:null, 
-                cacheDirectory: null, 
+            this(storageAccount,
+                catalog: null,
+                cacheDirectory: null,
                 multiCasePath: false)
         {
         }
@@ -38,9 +45,9 @@ namespace Lucene.Net.Store.Azure
             string storageAccount,
             string catalog,
             bool multiCasePath = false)
-            : this(storageAccount, 
-                  catalog: catalog, 
-                  cacheDirectory: null, 
+            : this(storageAccount,
+                  catalog: catalog,
+                  cacheDirectory: null,
                   multiCasePath: multiCasePath)
         {
         }
@@ -56,10 +63,10 @@ namespace Lucene.Net.Store.Azure
             string storageAccount,
             string catalog,
             Directory cacheDirectory,
-            bool multiCasePath = false) 
-            : this(new BlobServiceClient(storageAccount), 
-                  catalog: catalog, 
-                  cacheDirectory: cacheDirectory, 
+            bool multiCasePath = false)
+            : this(new BlobServiceClient(storageAccount),
+                  catalog: catalog,
+                  cacheDirectory: cacheDirectory,
                   multiCasePath: multiCasePath)
         {
         }
@@ -98,6 +105,107 @@ namespace Lucene.Net.Store.Azure
 
         public BlobContainerClient BlobContainer { get; private set; }
 
+        /// <summary>
+        /// Metadata cached for a single blob.
+        /// </summary>
+        internal struct BlobMetadata
+        {
+            public long ContentLength;
+            public string ETag;
+            public DateTimeOffset? LastModified;
+        }
+
+        /// <summary>
+        /// Refreshes the in-memory blob metadata cache by issuing a single ListBlobs call.
+        /// </summary>
+        private void RefreshBlobMetadataCache()
+        {
+            try
+            {
+                var prefix = string.IsNullOrEmpty(this.subDirectory) ? null : this.subDirectory + "/";
+                var newCache = new Dictionary<string, BlobMetadata>(StringComparer.Ordinal);
+
+                foreach (var item in BlobContainer.GetBlobsByHierarchy(delimiter: "/", prefix: prefix, traits: BlobTraits.None, states: BlobStates.None))
+                {
+                    if (!item.IsBlob)
+                        continue;
+
+                    var blobName = item.Blob.Name;
+                    var lastSlashIndex = blobName.LastIndexOf('/');
+                    var shortName = lastSlashIndex >= 0 ? blobName.Substring(lastSlashIndex + 1) : blobName;
+                    var props = item.Blob.Properties;
+                    newCache[shortName] = new BlobMetadata
+                    {
+                        ContentLength = props.ContentLength ?? 0,
+                        ETag = props.ETag?.ToString(),
+                        LastModified = props.LastModified
+                    };
+                }
+
+                _blobMetadataCache = newCache;
+            }
+            catch (RequestFailedException)
+            {
+            }
+        }
+
+        /// <summary>
+        /// Ensures the blob metadata cache has been populated at least once.
+        /// The authoritative refresh happens in <see cref="ListAll"/>, which Lucene
+        /// always calls before opening files. This method only does a full list if
+        /// the cache has never been populated.
+        /// </summary>
+        internal void EnsureCacheUpToDate()
+        {
+            lock (_cacheLock)
+            {
+                if (_blobMetadataCache == null)
+                    RefreshBlobMetadataCache();
+            }
+        }
+
+        /// <summary>
+        /// Returns the cached <see cref="BlobMetadata"/> for <paramref name="name"/>, or null if not found.
+        /// </summary>
+        internal BlobMetadata? GetCachedMetadata(string name)
+        {
+            lock (_cacheLock)
+            {
+                if (_blobMetadataCache != null && _blobMetadataCache.TryGetValue(name, out var meta))
+                    return meta;
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Removes a single entry from the metadata cache (e.g. after delete or write).
+        /// </summary>
+        private void InvalidateCacheEntry(string name)
+        {
+            lock (_cacheLock)
+            {
+                _blobMetadataCache?.Remove(name);
+            }
+        }
+
+        /// <summary>
+        /// Updates (or inserts) the cached metadata for a blob after a successful upload,
+        /// avoiding a re-download when the file is immediately read back.
+        /// </summary>
+        internal void UpdateCacheEntry(string name, long contentLength)
+        {
+            lock (_cacheLock)
+            {
+                if (_blobMetadataCache == null)
+                    return;
+
+                _blobMetadataCache[name] = new BlobMetadata
+                {
+                    ContentLength = contentLength
+                };
+            }
+        }
+
         public string Name { get; private set; }
 
         /// <summary>
@@ -120,27 +228,21 @@ namespace Lucene.Net.Store.Azure
         /// <summary>Returns an array of strings, one for each file in the directory. </summary>
         public override string[] ListAll()
         {
-            var prefix = string.IsNullOrEmpty(this.subDirectory) ? null : this.subDirectory + "/";
-            
-            return BlobContainer.GetBlobsByHierarchy(delimiter: "/", prefix: prefix)
-                .Where(x => x.IsBlob)
-                .Select(x => x.Blob.Name.Split('/').Last())
-                .ToArray();
+            // Always do a fresh listing — ListAll must reflect the current state of the container.
+            // Refreshing also keeps the metadata cache warm for subsequent FileExists/FileLength calls.
+            lock (_cacheLock)
+            {
+                RefreshBlobMetadataCache();
+                return _blobMetadataCache?.Keys.ToArray() ?? Array.Empty<string>();
+            }
         }
 
         /// <summary>Returns true if a file with the given name exists. </summary>
         [Obsolete("this method will be removed in 5.0")]
         public override bool FileExists(string name)
         {
-            // this always comes from the server
-            try
-            {
-                return BlobContainer.GetBlobClient(GetBlobName(name)).Exists();
-            }
-            catch (Exception)
-            {
-                return false;
-            }
+            EnsureCacheUpToDate();
+            return GetCachedMetadata(name).HasValue;
         }
 
         /// <summary>Removes an existing file in the directory. </summary>
@@ -149,21 +251,14 @@ namespace Lucene.Net.Store.Azure
             var blobName = GetBlobName(name);
             var blob = BlobContainer.GetBlobClient(blobName);
             blob.DeleteIfExists();
-            
+            InvalidateCacheEntry(name);
         }
 
         /// <summary>Returns the length of a file in the directory. </summary>
         public override long FileLength(string name)
         {
-            try
-            {
-                var blobName = GetBlobName(name);
-                return BlobContainer.GetBlobClient(blobName).GetProperties().Value?.ContentLength ?? 0;
-            }
-            catch
-            {
-                return 0;
-            }
+            EnsureCacheUpToDate();
+            return GetCachedMetadata(name)?.ContentLength ?? 0;
         }
 
         public override void Sync(ICollection<string> names)
@@ -181,6 +276,7 @@ namespace Lucene.Net.Store.Azure
         public override IndexInput OpenInput(string name, IOContext context)
         {
             // TODO: Figure out how IOContext comes into play here. So far it doesn't -- Aviad
+            EnsureCacheUpToDate();
             try
             {
                 var blobName = GetBlobName(name);
