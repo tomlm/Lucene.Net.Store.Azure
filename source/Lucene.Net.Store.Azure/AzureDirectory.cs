@@ -1,4 +1,5 @@
 ﻿//    License: Microsoft Public License (Ms-PL) 
+using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using System;
@@ -26,9 +27,9 @@ namespace Lucene.Net.Store.Azure
         /// </summary>
         /// <param name="storageAccount"></param>
         public AzureDirectory(string storageAccount) :
-            this(storageAccount, 
-                catalog:null, 
-                cacheDirectory: null, 
+            this(storageAccount,
+                catalog: null,
+                cacheDirectory: null,
                 multiCasePath: false)
         {
         }
@@ -44,9 +45,9 @@ namespace Lucene.Net.Store.Azure
             string storageAccount,
             string catalog,
             bool multiCasePath = false)
-            : this(storageAccount, 
-                  catalog: catalog, 
-                  cacheDirectory: null, 
+            : this(storageAccount,
+                  catalog: catalog,
+                  cacheDirectory: null,
                   multiCasePath: multiCasePath)
         {
         }
@@ -62,10 +63,10 @@ namespace Lucene.Net.Store.Azure
             string storageAccount,
             string catalog,
             Directory cacheDirectory,
-            bool multiCasePath = false) 
-            : this(new BlobServiceClient(storageAccount), 
-                  catalog: catalog, 
-                  cacheDirectory: cacheDirectory, 
+            bool multiCasePath = false)
+            : this(new BlobServiceClient(storageAccount),
+                  catalog: catalog,
+                  cacheDirectory: cacheDirectory,
                   multiCasePath: multiCasePath)
         {
         }
@@ -119,25 +120,33 @@ namespace Lucene.Net.Store.Azure
         /// </summary>
         private void RefreshBlobMetadataCache()
         {
-            var prefix = string.IsNullOrEmpty(this.subDirectory) ? null : this.subDirectory + "/";
-            var newCache = new Dictionary<string, BlobMetadata>(StringComparer.Ordinal);
-
-            foreach (var item in BlobContainer.GetBlobsByHierarchy(delimiter: "/", prefix: prefix, traits: BlobTraits.None, states: BlobStates.None))
+            try
             {
-                if (!item.IsBlob)
-                    continue;
+                var prefix = string.IsNullOrEmpty(this.subDirectory) ? null : this.subDirectory + "/";
+                var newCache = new Dictionary<string, BlobMetadata>(StringComparer.Ordinal);
 
-                var shortName = item.Blob.Name.Split('/').Last();
-                var props = item.Blob.Properties;
-                newCache[shortName] = new BlobMetadata
+                foreach (var item in BlobContainer.GetBlobsByHierarchy(delimiter: "/", prefix: prefix, traits: BlobTraits.None, states: BlobStates.None))
                 {
-                    ContentLength = props.ContentLength ?? 0,
-                    ETag = props.ETag?.ToString(),
-                    LastModified = props.LastModified
-                };
-            }
+                    if (!item.IsBlob)
+                        continue;
 
-            _blobMetadataCache = newCache;
+                    var blobName = item.Blob.Name;
+                    var lastSlashIndex = blobName.LastIndexOf('/');
+                    var shortName = lastSlashIndex >= 0 ? blobName.Substring(lastSlashIndex + 1) : blobName;
+                    var props = item.Blob.Properties;
+                    newCache[shortName] = new BlobMetadata
+                    {
+                        ContentLength = props.ContentLength ?? 0,
+                        ETag = props.ETag?.ToString(),
+                        LastModified = props.LastModified
+                    };
+                }
+
+                _blobMetadataCache = newCache;
+            }
+            catch (RequestFailedException)
+            {
+            }
         }
 
         /// <summary>
