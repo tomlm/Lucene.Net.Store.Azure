@@ -25,6 +25,11 @@ jobs:
       with:
         dotnet-version: 10.0.x
 
+    - name: Install and start Azurite
+      run: |
+        npm install -g azurite
+        azurite --silent &
+
     - name: Restore dependencies
       run: dotnet restore source/AzureDirectory.sln
 
