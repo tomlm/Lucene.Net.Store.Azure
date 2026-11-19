@@ -225,6 +225,43 @@ namespace Lucene.Net.Store.Azure.Tests
         }
 
         [TestMethod]
+        public void FileLocks_OfAWrappedFolderCache_AreScopedToTheFolder()
+        {
+            var catalog = NewCatalog(nameof(FileLocks_OfAWrappedFolderCache_AreScopedToTheFolder));
+            var sharedCache = NewCacheFolder();
+            var first = new AzureDirectory(new BlobServiceClient(ConnectionString), catalog,
+                new NRTCachingDirectory(FSDirectory.Open(sharedCache), 5.0, 60.0));
+            var second = new AzureDirectory(new BlobServiceClient(ConnectionString), catalog,
+                new TrackingDirectoryWrapper(FSDirectory.Open(sharedCache)));
+
+            using var held = new ManualResetEventSlim();
+            using var done = new ManualResetEventSlim();
+            // A mutex belongs to the thread that took it, so it is held on a thread of its own.
+            var holder = new Thread(() =>
+            {
+                using (first.LockFile("segments.gen"))
+                {
+                    held.Set();
+                    done.Wait();
+                }
+            });
+            holder.Start();
+            held.Wait();
+            try
+            {
+                var shared = Task.Run(() => { using (second.LockFile("segments.gen")) { } });
+                Assert.IsFalse(shared.Wait(TimeSpan.FromMilliseconds(500)), "Wrapped caches of one folder did not share the file lock.");
+                done.Set();
+                Assert.IsTrue(shared.Wait(TimeSpan.FromSeconds(5)));
+            }
+            finally
+            {
+                done.Set();
+                holder.Join();
+            }
+        }
+
+        [TestMethod]
         public void FileLocks_AreScopedToTheCache_NotTheFileName()
         {
             var catalog = NewCatalog(nameof(FileLocks_AreScopedToTheCache_NotTheFileName));

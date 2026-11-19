@@ -567,11 +567,35 @@ namespace Lucene.Net.Store.Azure
                 this.CacheDirectory = FSDirectory.Open(catalogPath);
             }
 
-            _lockScope = this.CacheDirectory is FSDirectory fsDirectory
+            // A cache in a folder, even wrapped, is scoped to the folder. Any other cache (in memory,
+            // or a directory of the caller's own) is taken to be this instance's alone.
+            var fsDirectory = FindFSDirectory(this.CacheDirectory);
+            _lockScope = fsDirectory != null
                 ? Path.GetFullPath(fsDirectory.Directory.FullName).ToLowerInvariant()
-                : $"{this.Name}#{Guid.NewGuid():N}";   // an in-memory cache is this instance's alone
+                : $"{this.Name}#{Guid.NewGuid():N}";
 
             CreateContainer();
+        }
+
+        /// <summary>The <see cref="FSDirectory"/> a cache is, or wraps; null if none.</summary>
+        private static FSDirectory FindFSDirectory(Directory directory)
+        {
+            while (true)
+            {
+                switch (directory)
+                {
+                    case FSDirectory fsDirectory:
+                        return fsDirectory;
+                    case FilterDirectory filter:
+                        directory = filter.Delegate;
+                        break;
+                    case NRTCachingDirectory nrtCaching:   // not a FilterDirectory in Lucene.Net 4.8
+                        directory = nrtCaching.Delegate;
+                        break;
+                    default:
+                        return null;
+                }
+            }
         }
 
         public void CreateContainer()
