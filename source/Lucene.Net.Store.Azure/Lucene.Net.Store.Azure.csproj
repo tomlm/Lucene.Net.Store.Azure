@@ -2,18 +2,18 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>4.8.5-beta021</Version>
+    <Version>4.8.6-beta018</Version>
     <Authors>Tom Laird-McConnell</Authors>
     <Title>Azure blob storage for Lucene.net</Title>
     <Summary>This project allows you to store Lucene Indexes in by Azure BlobStorage.</Summary>
-    <Description>This project allows you to create Lucene Indexes via a AzureDirectory object which uses Azure BlobStorage for persistent storage.  This .NET Standard compliant library for us with .NET Core or .NET Desktop. It uses Lucene.Net 4.8.0.beta00011</Description>
+    <Description>This project allows you to create Lucene Indexes via a AzureDirectory object which uses Azure BlobStorage for persistent storage.  This .NET Standard compliant library for us with .NET Core or .NET Desktop. It uses Lucene.Net 4.8.0-beta00018</Description>
     <PackageProjectUrl>https://github.com/tomlm/Lucene.Net.Store.Azure</PackageProjectUrl>
     <RepositoryUrl>https://github.com/tomlm/Lucene.Net.Store.Azure</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MS-PL</PackageLicenseExpression>
-    <AssemblyVersion>4.8.5.21</AssemblyVersion>
-    <FileVersion>4.8.5.21</FileVersion>
-    <PackageReleaseNotes>This is a release with dependency on Lucene.Net 4.8.0.beta 0017</PackageReleaseNotes>
+    <AssemblyVersion>4.8.6.18</AssemblyVersion>
+    <FileVersion>4.8.6.18</FileVersion>
+    <PackageReleaseNotes>This is a release with dependency on Lucene.Net 4.8.0-beta00018. Breaking change: a file is no longer uploaded to blob storage when it is closed, but when Lucene syncs it (IndexWriter does on commit). Code that writes files to an AzureDirectory directly (CreateOutput, Directory.Copy) must call Sync with their names.</PackageReleaseNotes>
     <PackageIconUrl>https://raw.githubusercontent.com/tomlm/Lucene.Net.Store.Azure/master/icon.png</PackageIconUrl>
     <PackageIcon>icon.png</PackageIcon>
     <PackageReadmeFile>readme.md</PackageReadmeFile>
@@ -35,9 +35,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Lucene.Net.Store.Azure.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Azure.Storage.Blobs" Version="12.23.0" />
-    <PackageReference Include="Lucene.Net" Version="4.8.0-beta00017" />
-    <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00017" />
+    <PackageReference Include="Lucene.Net" Version="4.8.0-beta00018" />
+    <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00018" />
   </ItemGroup>
 
 </Project>

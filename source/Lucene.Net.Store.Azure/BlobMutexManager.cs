@@ -6,6 +6,7 @@ using System.Threading;
 
 namespace Lucene.Net.Store.Azure
 {
+    [Obsolete("No longer used by AzureDirectory: its file locks are scoped to the local cache. This mutex is shared by every directory on the machine with a file of the same name.")]
     public static class BlobMutexManager
     {
         public static Mutex GrabMutex(string name)

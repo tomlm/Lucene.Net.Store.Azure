@@ -19,7 +19,6 @@ namespace Lucene.Net.Store.Azure
         private AzureDirectory _azureDirectory;
         private BlobClient _blob;
         private IndexInput _indexInput;
-        private Mutex _fileMutex;
 
         public AzureIndexInput(AzureDirectory azureDirectory, string name, BlobClient blob)
             : base(name)
@@ -29,13 +28,15 @@ namespace Lucene.Net.Store.Azure
 #if FULLDEBUG
             Debug.WriteLine($"{_azureDirectory.Name} opening {name} ");
 #endif
-            _fileMutex = BlobMutexManager.GrabMutex(name);
-            _fileMutex.WaitOne();
-            try
+            using (_azureDirectory.LockFile(name))
             {
                 _blob = blob;
                 bool fileNeeded = false;
-                if (!CacheDirectory.FileExists(name))
+                if (_azureDirectory.IsPending(name))
+                {
+                    // Written here and not yet uploaded: the cache holds the only copy.
+                }
+                else if (!CacheDirectory.FileExists(name))
                 {
                     fileNeeded = true;
                 }
@@ -98,11 +99,6 @@ namespace Lucene.Net.Store.Azure
 #endif
                 // and open it as our input, this is now available forevers until new file comes along
                 _indexInput = CacheDirectory.OpenInput(name, IOContext.DEFAULT);
-
-            }
-            finally
-            {
-                _fileMutex.ReleaseMutex();
             }
         }
 
@@ -115,7 +111,6 @@ namespace Lucene.Net.Store.Azure
             _name = clone._name;
             _azureDirectory = clone._azureDirectory;
             _blob = clone._blob;
-            _fileMutex = BlobMutexManager.GrabMutex(_name);
             _indexInput = clone._indexInput.Clone() as IndexInput;
         }
 
@@ -142,22 +137,14 @@ namespace Lucene.Net.Store.Azure
 
         protected override void Dispose(bool disposing)
         {
-            _fileMutex.WaitOne();
-            try
-            {
 #if FULLDEBUG
-                Debug.WriteLine($"{_azureDirectory.Name} CLOSED READSTREAM local {_name}");
+            Debug.WriteLine($"{_azureDirectory.Name} CLOSED READSTREAM local {_name}");
 #endif
-                _indexInput.Dispose();
-                _indexInput = null;
-                _azureDirectory = null;
-                _blob = null;
-                GC.SuppressFinalize(this);
-            }
-            finally
-            {
-                _fileMutex.ReleaseMutex();
-            }
+            _indexInput?.Dispose();
+            _indexInput = null;
+            _azureDirectory = null;
+            _blob = null;
+            GC.SuppressFinalize(this);
         }
 
         public override Object Clone()

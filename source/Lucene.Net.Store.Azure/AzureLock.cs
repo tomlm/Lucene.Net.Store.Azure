@@ -73,6 +73,8 @@ namespace Lucene.Net.Store.Azure
                     var lease = blob.GetBlobLeaseClient().Acquire(TimeSpan.FromSeconds(60));
                     _leaseid = lease.Value.LeaseId;
                     Debug.WriteLine($"{_azureDirectory.Name} AzureLock:Obtain({_lockFile}): AcquiredLease : {_leaseid}");
+                    if (!String.IsNullOrEmpty(_leaseid))
+                        _azureDirectory.OnLockObtained();
 
                     // keep the lease alive by renewing every 30 seconds
                     long interval = (long)TimeSpan.FromSeconds(30).TotalMilliseconds;
@@ -138,6 +140,8 @@ namespace Lucene.Net.Store.Azure
             {
             }
             blob.Delete();
+            if (!String.IsNullOrEmpty(_leaseid))
+                _azureDirectory.OnLockReleased();
             _leaseid = null;
         }
 
@@ -163,7 +167,9 @@ namespace Lucene.Net.Store.Azure
                 }
                 catch (RequestFailedException err2)
                 {
-                    if (err2.Status == 409)
+                    // Someone else created the lock blob first: 409 when it exists, 412 (LeaseIdMissing)
+                    // when they have also leased it already. Either way, try again.
+                    if (err2.Status == 409 || err2.Status == 412)
                         return true;
                     throw;
                 }
@@ -184,8 +190,15 @@ namespace Lucene.Net.Store.Azure
                 }
                 Debug.WriteLine($"{_azureDirectory.Name} AzureLock:Dispose({_lockFile}): ReleasedLease: {_leaseid}");
                 var blob = _azureDirectory.BlobContainer.GetBlobClient(_lockFile);
-                var response = blob.GetBlobLeaseClient(_leaseid).Release();
-                _leaseid = null;
+                try
+                {
+                    blob.GetBlobLeaseClient(_leaseid).Release();
+                }
+                finally
+                {
+                    _leaseid = null;
+                    _azureDirectory.OnLockReleased();
+                }
             }
         }
     }
