@@ -13,7 +13,7 @@
     <PackageLicenseExpression>MS-PL</PackageLicenseExpression>
     <AssemblyVersion>4.8.6.18</AssemblyVersion>
     <FileVersion>4.8.6.18</FileVersion>
-    <PackageReleaseNotes>This is a release with dependency on Lucene.Net 4.8.0-beta00018</PackageReleaseNotes>
+    <PackageReleaseNotes>This is a release with dependency on Lucene.Net 4.8.0-beta00018. Breaking change: a file is no longer uploaded to blob storage when it is closed, but when Lucene syncs it (IndexWriter does on commit). Code that writes files to an AzureDirectory directly (CreateOutput, Directory.Copy) must call Sync with their names.</PackageReleaseNotes>
     <PackageIconUrl>https://raw.githubusercontent.com/tomlm/Lucene.Net.Store.Azure/master/icon.png</PackageIconUrl>
     <PackageIcon>icon.png</PackageIcon>
     <PackageReadmeFile>readme.md</PackageReadmeFile>

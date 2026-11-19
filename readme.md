@@ -142,12 +142,14 @@ The AzureDirectory class implements the Directory contract as a wrapper around a
 * When Lucene asks to delete a segment, the AzureDirectory deletes the local cache segment and the blob in blob storage.
 * When Lucene asks to for a read stream for a segment (remember segments never change after being closed) AzureDirectory looks to see if it is in the local cache Directory, and if it is, simply returns the local cache stream for that segment. Otherwise it fetches the segment from blobstorage, stores it in the local cache Directory and then returns the local cache steram for that segment.
 * When Lucene needs to do a write, it asks the directory for a lock.  This lock is at the catalog level and for AzureDirectory it is implemented using Blob Storage locks.
-* When Lucene asks for a write stream for a segment it returns a wrapper around the stream in the local Directory cache, and on close it pushes the data up to a blob in blob storage. 
+* When Lucene asks for a write stream for a segment it returns a wrapper around the stream in the local Directory cache. Closing the stream does not upload the file: it is pushed up to a blob in blob storage when Lucene syncs it (Directory.Sync), which IndexWriter does for every file a commit needs. Files Lucene deletes before a commit, such as the parts of a segment packed into a compound file, are never uploaded. 
 
 The net result is that:
 * all read operations will be performed against the local cache Directory object (which if it is a RAMDirectory is near instaneous). 
 * Any time a segment is missing in the local cache you will incure the cost of downloading the segment once. 
-* All Write operations are performed against the local cache Directory object until the segment is closed, at which point you incur the cost of uploading the segment, but with a lock to prevent other writes to the catalog.
+* All Write operations are performed against the local cache Directory object until the index is committed, at which point you incur the cost of uploading the files the commit needs, but with a lock to prevent other writes to the catalog.
+
+> NOTE: If you write files to an AzureDirectory yourself rather than through an IndexWriter (with CreateOutput, or Lucene's Directory.Copy), call Sync with their names once they are closed. Until then they exist only in the local cache, and other AzureDirectory instances will not see them. Earlier versions uploaded every file on close.
 
 > NOTE: Lucene only always one writer at a time per catalog. If you want multiple machines to be writing at the same time you can increase your write throughput by having multiple catalogs, each with a writer.  Then your searcher instances can create a MultiSearcher() which searches over all of the catalogs.  This allows you to scale your writers and searchers independently. 
 
