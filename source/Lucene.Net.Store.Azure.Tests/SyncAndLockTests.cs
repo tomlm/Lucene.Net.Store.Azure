@@ -204,6 +204,27 @@ namespace Lucene.Net.Store.Azure.Tests
         }
 
         [TestMethod]
+        public void ClearingTheCache_KeepsFilesNotYetUploaded()
+        {
+            var catalog = NewCatalog(nameof(ClearingTheCache_KeepsFilesNotYetUploaded));
+            var directory = Open(catalog);
+            using (var writer = NewWriter(directory))
+            {
+                AddDocuments(writer, 50);
+                writer.Commit();
+                // A flushed segment is written to the cache only; clearing the cache must not lose it.
+                AddDocuments(writer, 25);
+                writer.Flush(triggerMerge: false, applyAllDeletes: true);
+                directory.ClearCache();
+                writer.Commit();
+            }
+
+            var reading = Open(catalog);
+            using (var reader = DirectoryReader.Open(reading))
+                Assert.AreEqual(75, reader.NumDocs);
+        }
+
+        [TestMethod]
         public void FileLocks_AreScopedToTheCache_NotTheFileName()
         {
             var catalog = NewCatalog(nameof(FileLocks_AreScopedToTheCache_NotTheFileName));

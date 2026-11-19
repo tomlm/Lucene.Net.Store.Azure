@@ -235,13 +235,26 @@ namespace Lucene.Net.Store.Azure
         /// </summary>
         public Directory CacheDirectory { get; private set; }
 
+        /// <summary>
+        /// Deletes the files in the local cache, except those not yet uploaded: the cache holds
+        /// their only copy.
+        /// </summary>
         public void ClearCache()
         {
             if (this.CacheDirectory != null)
             {
                 foreach (string file in CacheDirectory.ListAll())
                 {
-                    CacheDirectory.DeleteFile(file);
+                    using (LockFile(file))
+                    {
+                        if (IsPending(file))
+                            continue;
+                        CacheDirectory.DeleteFile(file);
+                        lock (_cacheLock)
+                        {
+                            _staleCopies.Remove(file);
+                        }
+                    }
                 }
             }
         }
