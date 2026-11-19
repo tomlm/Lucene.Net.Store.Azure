@@ -167,7 +167,9 @@ namespace Lucene.Net.Store.Azure
                 }
                 catch (RequestFailedException err2)
                 {
-                    if (err2.Status == 409)
+                    // Someone else created the lock blob first: 409 when it exists, 412 (LeaseIdMissing)
+                    // when they have also leased it already. Either way, try again.
+                    if (err2.Status == 409 || err2.Status == 412)
                         return true;
                     throw;
                 }
