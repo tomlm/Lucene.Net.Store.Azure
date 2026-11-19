@@ -310,7 +310,7 @@ namespace Lucene.Net.Store.Azure
                 InvalidateCacheEntry(name);
             }
             // The local copy goes too, or the cache would grow without bound.
-            DeleteLocalCopy(name);
+            DeleteLocalCopy(name, retry: false);
             DeleteStaleCopies();
         }
 
@@ -318,11 +318,22 @@ namespace Lucene.Net.Store.Azure
         /// Removes a deleted file's copy from the local cache. A copy a reader still has open is
         /// remembered and removed on a later delete or sync.
         /// </summary>
-        private void DeleteLocalCopy(string name)
+        private void DeleteLocalCopy(string name, bool retry)
         {
-            bool deleted;
+            // All under the file's lock, which CreateOutput also takes, so a file written again
+            // since it was deleted is never taken for the old copy.
             using (LockFile(name))
             {
+                if (retry)
+                {
+                    lock (_cacheLock)
+                    {
+                        // Written again since the retry was picked: the copy is the new file.
+                        if (!_staleCopies.Contains(name) || _pending.Contains(name))
+                            return;
+                    }
+                }
+                bool deleted;
                 try
                 {
                     CacheDirectory.DeleteFile(name);
@@ -336,13 +347,13 @@ namespace Lucene.Net.Store.Azure
                 {
                     deleted = false;
                 }
-            }
-            lock (_cacheLock)
-            {
-                if (deleted)
-                    _staleCopies.Remove(name);
-                else
-                    _staleCopies.Add(name);
+                lock (_cacheLock)
+                {
+                    if (deleted)
+                        _staleCopies.Remove(name);
+                    else
+                        _staleCopies.Add(name);
+                }
             }
         }
 
@@ -357,7 +368,7 @@ namespace Lucene.Net.Store.Azure
                 stale = _staleCopies.ToArray();
             }
             foreach (var name in stale)
-                DeleteLocalCopy(name);
+                DeleteLocalCopy(name, retry: true);
         }
 
         /// <summary>Returns the length of a file in the directory. </summary>
@@ -524,12 +535,16 @@ namespace Lucene.Net.Store.Azure
             // TODO: Figure out how IOContext comes into play here. So far it doesn't -- Aviad
             var blobName = GetBlobName(name);
             var blob = BlobContainer.GetBlobClient(blobName);
-            lock (_cacheLock)
+            // Under the file's lock, so a retried delete of the old copy comes before it, or not at all.
+            using (LockFile(name))
             {
-                // Written again (segments.gen is): its new local copy is not stale.
-                _staleCopies.Remove(name);
+                lock (_cacheLock)
+                {
+                    // Written again (segments.gen is): its new local copy is not stale.
+                    _staleCopies.Remove(name);
+                }
+                return new AzureIndexOutput(this, name, blob);
             }
-            return new AzureIndexOutput(this, name, blob);
         }
         #endregion
 
