@@ -6,7 +6,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Lucene.Net.Store.Azure
 {
@@ -16,11 +19,26 @@ namespace Lucene.Net.Store.Azure
         private readonly string containerName;
         private readonly string subDirectory;
 
-        private readonly Dictionary<string, AzureIndexOutput> _nameCache = new Dictionary<string, AzureIndexOutput>();
-
         // Blob metadata cache — refreshed by ListAll(); lazily populated on first access
         private Dictionary<string, BlobMetadata> _blobMetadataCache;
         private readonly object _cacheLock = new object();
+
+        // Files written to the local cache and closed, but not yet uploaded: Lucene has not synced
+        // them. They are uploaded by Sync, or never, when Lucene deletes them first.
+        private readonly HashSet<string> _pending = new HashSet<string>(StringComparer.Ordinal);
+
+        // How many locks of this directory this process holds. While it holds one (the index
+        // writer's), no other process can change the directory, so after one fresh listing the
+        // metadata cache is kept up to date by this process's own writes and deletes.
+        private int _locksHeld;
+        private bool _listedWhileLocked;
+
+        // What the per-file locks are scoped to: the local cache, so two directories (or two
+        // processes) sharing a cache folder take the same lock for the same file, and nothing else does.
+        private string _lockScope;
+
+        // How many files Sync uploads at once.
+        private const int MaxParallelUploads = 8;
 
         /// <summary>
         /// Create AzureDirectory with just storagaccount string
@@ -225,15 +243,25 @@ namespace Lucene.Net.Store.Azure
         }
         #region DIRECTORYMETHODS
 
-        /// <summary>Returns an array of strings, one for each file in the directory. </summary>
+        /// <summary>
+        /// Returns an array of strings, one for each file in the directory: those in blob storage,
+        /// and those written here and not yet uploaded.
+        /// </summary>
         public override string[] ListAll()
         {
-            // Always do a fresh listing — ListAll must reflect the current state of the container.
-            // Refreshing also keeps the metadata cache warm for subsequent FileExists/FileLength calls.
             lock (_cacheLock)
             {
-                RefreshBlobMetadataCache();
-                return _blobMetadataCache?.Keys.ToArray() ?? Array.Empty<string>();
+                // A fresh listing, so other processes' changes are seen — except while this
+                // process holds the directory's lock and has listed once since taking it: then
+                // nobody else can change the container, and the cache is already current.
+                if (_locksHeld == 0 || !_listedWhileLocked || _blobMetadataCache == null)
+                {
+                    RefreshBlobMetadataCache();
+                    _listedWhileLocked = _locksHeld > 0;
+                }
+                var names = new HashSet<string>(_blobMetadataCache?.Keys ?? Enumerable.Empty<string>(), StringComparer.Ordinal);
+                names.UnionWith(_pending);
+                return names.ToArray();
             }
         }
 
@@ -241,6 +269,8 @@ namespace Lucene.Net.Store.Azure
         [Obsolete("this method will be removed in 5.0")]
         public override bool FileExists(string name)
         {
+            if (IsPending(name))
+                return true;
             EnsureCacheUpToDate();
             return GetCachedMetadata(name).HasValue;
         }
@@ -248,6 +278,23 @@ namespace Lucene.Net.Store.Azure
         /// <summary>Removes an existing file in the directory. </summary>
         public override void DeleteFile(string name)
         {
+            bool wasPending, inBlobStorage;
+            lock (_cacheLock)
+            {
+                wasPending = _pending.Remove(name);
+                inBlobStorage = _blobMetadataCache == null || _blobMetadataCache.ContainsKey(name);
+            }
+            if (wasPending)
+            {
+                // Never uploaded: only the local copy exists (unless an earlier version was uploaded).
+                using (LockFile(name))
+                {
+                    try { CacheDirectory.DeleteFile(name); }
+                    catch (IOException) { }
+                }
+                if (!inBlobStorage)
+                    return;
+            }
             var blobName = GetBlobName(name);
             var blob = BlobContainer.GetBlobClient(blobName);
             blob.DeleteIfExists();
@@ -257,19 +304,128 @@ namespace Lucene.Net.Store.Azure
         /// <summary>Returns the length of a file in the directory. </summary>
         public override long FileLength(string name)
         {
+            if (IsPending(name))
+                return CacheDirectory.FileLength(name);
             EnsureCacheUpToDate();
             return GetCachedMetadata(name)?.ContentLength ?? 0;
         }
 
+        /// <summary>
+        /// Makes the files durable: uploads those written here and not yet uploaded. Lucene syncs
+        /// every file a commit needs before it writes the commit, so a file it never syncs (one it
+        /// deletes first) never reaches blob storage.
+        /// </summary>
         public override void Sync(ICollection<string> names)
         {
-            // TODO: This all is purely guesswork, no idea what has to be done here. -- Aviad.
-            foreach (var name in names)
+            string[] toUpload;
+            lock (_cacheLock)
             {
-                if (_nameCache.ContainsKey(name))
+                toUpload = names.Where(_pending.Contains).Distinct(StringComparer.Ordinal).ToArray();
+            }
+            if (toUpload.Length == 0)
+                return;
+            Parallel.ForEach(toUpload, new ParallelOptions { MaxDegreeOfParallelism = MaxParallelUploads }, Upload);
+        }
+
+        /// <summary>Uploads a file from the local cache to blob storage.</summary>
+        private void Upload(string name)
+        {
+            using (LockFile(name))
+            {
+                lock (_cacheLock)
                 {
-                    _nameCache[name].Flush();
+                    // Deleted, or uploaded by another Sync, since it was picked.
+                    if (!_pending.Contains(name))
+                        return;
                 }
+                long length;
+                using (var stream = new StreamInput(CacheDirectory.OpenInput(name, IOContext.DEFAULT)))
+                {
+                    length = stream.Length;
+                    BlobContainer.GetBlobClient(GetBlobName(name)).Upload(stream, overwrite: true);
+                }
+                lock (_cacheLock)
+                {
+                    _pending.Remove(name);
+                }
+                UpdateCacheEntry(name, length);
+            }
+        }
+
+        /// <summary>A file written here and closed, waiting for Lucene to sync it.</summary>
+        internal void MarkPending(string name)
+        {
+            lock (_cacheLock)
+            {
+                _pending.Add(name);
+            }
+        }
+
+        /// <summary>Whether a file was written here and not yet uploaded, so the local cache holds the only copy.</summary>
+        internal bool IsPending(string name)
+        {
+            lock (_cacheLock)
+            {
+                return _pending.Contains(name);
+            }
+        }
+
+        /// <summary>Called by <see cref="AzureLock"/> when it takes the directory's lock.</summary>
+        internal void OnLockObtained()
+        {
+            lock (_cacheLock)
+            {
+                if (_locksHeld++ == 0)
+                    _listedWhileLocked = false;
+            }
+        }
+
+        /// <summary>Called by <see cref="AzureLock"/> when it gives up the directory's lock.</summary>
+        internal void OnLockReleased()
+        {
+            lock (_cacheLock)
+            {
+                if (_locksHeld > 0)
+                    _locksHeld--;
+            }
+        }
+
+        /// <summary>
+        /// Takes the lock for one file of the local cache, so a download, an upload or a new local
+        /// copy of it are never made at the same time. It is scoped to the cache, not the machine:
+        /// directories with caches of their own never wait for one another.
+        /// </summary>
+        internal IDisposable LockFile(string name) => new FileLock(_lockScope, name);
+
+        private sealed class FileLock : IDisposable
+        {
+            private Mutex _mutex;
+
+            public FileLock(string scope, string name)
+            {
+                // A named mutex, so processes sharing one cache folder are covered too. The name is
+                // a hash: mutex names cannot hold a backslash and are limited in length.
+                string hash;
+                using (var sha = SHA256.Create())
+                    hash = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(scope + "|" + name)), 0, 16).Replace("-", "");
+                _mutex = new Mutex(false, "LuceneAzureFile_" + hash);
+                try
+                {
+                    _mutex.WaitOne();
+                }
+                catch (AbandonedMutexException)
+                {
+                    // A process died holding it; the lock is ours now.
+                }
+            }
+
+            public void Dispose()
+            {
+                if (_mutex == null)
+                    return;
+                _mutex.ReleaseMutex();
+                _mutex.Dispose();
+                _mutex = null;
             }
         }
 
@@ -309,9 +465,7 @@ namespace Lucene.Net.Store.Azure
             // TODO: Figure out how IOContext comes into play here. So far it doesn't -- Aviad
             var blobName = GetBlobName(name);
             var blob = BlobContainer.GetBlobClient(blobName);
-            var indexOutput = new AzureIndexOutput(this, name, blob);
-            _nameCache[name] = indexOutput;
-            return indexOutput;
+            return new AzureIndexOutput(this, name, blob);
         }
         #endregion
 
@@ -348,6 +502,10 @@ namespace Lucene.Net.Store.Azure
 
                 this.CacheDirectory = FSDirectory.Open(catalogPath);
             }
+
+            _lockScope = this.CacheDirectory is FSDirectory fsDirectory
+                ? Path.GetFullPath(fsDirectory.Directory.FullName).ToLowerInvariant()
+                : $"{this.Name}#{Guid.NewGuid():N}";   // an in-memory cache is this instance's alone
 
             CreateContainer();
         }
