@@ -27,6 +27,10 @@ namespace Lucene.Net.Store.Azure
         // them. They are uploaded by Sync, or never, when Lucene deletes them first.
         private readonly HashSet<string> _pending = new HashSet<string>(StringComparer.Ordinal);
 
+        // Local copies of deleted files that could not be removed yet, because a reader still had
+        // them open (Windows will not delete an open file). Tried again on later deletes and syncs.
+        private readonly HashSet<string> _staleCopies = new HashSet<string>(StringComparer.Ordinal);
+
         // How many locks of this directory this process holds. While it holds one (the index
         // writer's), no other process can change the directory, so after one fresh listing the
         // metadata cache is kept up to date by this process's own writes and deletes.
@@ -284,21 +288,63 @@ namespace Lucene.Net.Store.Azure
                 wasPending = _pending.Remove(name);
                 inBlobStorage = _blobMetadataCache == null || _blobMetadataCache.ContainsKey(name);
             }
-            if (wasPending)
+            // A file written here and never uploaded has no blob (unless an earlier version was uploaded).
+            if (!wasPending || inBlobStorage)
             {
-                // Never uploaded: only the local copy exists (unless an earlier version was uploaded).
-                using (LockFile(name))
-                {
-                    try { CacheDirectory.DeleteFile(name); }
-                    catch (IOException) { }
-                }
-                if (!inBlobStorage)
-                    return;
+                var blobName = GetBlobName(name);
+                var blob = BlobContainer.GetBlobClient(blobName);
+                blob.DeleteIfExists();
+                InvalidateCacheEntry(name);
             }
-            var blobName = GetBlobName(name);
-            var blob = BlobContainer.GetBlobClient(blobName);
-            blob.DeleteIfExists();
-            InvalidateCacheEntry(name);
+            // The local copy goes too, or the cache would grow without bound.
+            DeleteLocalCopy(name);
+            DeleteStaleCopies();
+        }
+
+        /// <summary>
+        /// Removes a deleted file's copy from the local cache. A copy a reader still has open is
+        /// remembered and removed on a later delete or sync.
+        /// </summary>
+        private void DeleteLocalCopy(string name)
+        {
+            bool deleted;
+            using (LockFile(name))
+            {
+                try
+                {
+                    CacheDirectory.DeleteFile(name);
+                    deleted = true;
+                }
+                catch (FileNotFoundException)
+                {
+                    deleted = true;
+                }
+                catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+                {
+                    deleted = false;
+                }
+            }
+            lock (_cacheLock)
+            {
+                if (deleted)
+                    _staleCopies.Remove(name);
+                else
+                    _staleCopies.Add(name);
+            }
+        }
+
+        /// <summary>Tries again to remove the local copies that could not be removed before.</summary>
+        private void DeleteStaleCopies()
+        {
+            string[] stale;
+            lock (_cacheLock)
+            {
+                if (_staleCopies.Count == 0)
+                    return;
+                stale = _staleCopies.ToArray();
+            }
+            foreach (var name in stale)
+                DeleteLocalCopy(name);
         }
 
         /// <summary>Returns the length of a file in the directory. </summary>
@@ -322,9 +368,9 @@ namespace Lucene.Net.Store.Azure
             {
                 toUpload = names.Where(_pending.Contains).Distinct(StringComparer.Ordinal).ToArray();
             }
-            if (toUpload.Length == 0)
-                return;
-            Parallel.ForEach(toUpload, new ParallelOptions { MaxDegreeOfParallelism = MaxParallelUploads }, Upload);
+            if (toUpload.Length > 0)
+                Parallel.ForEach(toUpload, new ParallelOptions { MaxDegreeOfParallelism = MaxParallelUploads }, Upload);
+            DeleteStaleCopies();
         }
 
         /// <summary>Uploads a file from the local cache to blob storage.</summary>
@@ -465,6 +511,11 @@ namespace Lucene.Net.Store.Azure
             // TODO: Figure out how IOContext comes into play here. So far it doesn't -- Aviad
             var blobName = GetBlobName(name);
             var blob = BlobContainer.GetBlobClient(blobName);
+            lock (_cacheLock)
+            {
+                // Written again (segments.gen is): its new local copy is not stale.
+                _staleCopies.Remove(name);
+            }
             return new AzureIndexOutput(this, name, blob);
         }
         #endregion

@@ -149,6 +149,60 @@ namespace Lucene.Net.Store.Azure.Tests
             }
         }
 
+        /// <summary>The files in a cache folder.</summary>
+        private static string[] CachedFiles(string cacheFolder) =>
+            System.IO.Directory.GetFiles(cacheFolder).Select(Path.GetFileName).OrderBy(n => n, StringComparer.Ordinal).ToArray();
+
+        [TestMethod]
+        public void DeletingAFile_RemovesItsLocalCopy_SoTheCacheDoesNotGrow()
+        {
+            // Issue 39: each commit retires the previous segments_N (and merges retire segments),
+            // and their local copies were never removed.
+            var cacheFolder = NewCacheFolder();
+            var directory = Open(NewCatalog(nameof(DeletingAFile_RemovesItsLocalCopy_SoTheCacheDoesNotGrow)), cacheFolder);
+            for (var round = 0; round < 10; round++)
+            {
+                using (var writer = NewWriter(directory))
+                {
+                    AddDocuments(writer, 10);
+                    writer.Commit();
+                }
+            }
+
+            var inStorage = directory.ListAll().ToHashSet(StringComparer.Ordinal);
+            var orphans = CachedFiles(cacheFolder).Where(f => !inStorage.Contains(f)).ToArray();
+            Assert.AreEqual(0, orphans.Length, "Cached but deleted: " + string.Join(", ", orphans));
+        }
+
+        [TestMethod]
+        public void ALocalCopyAReaderHasOpen_IsRemovedOnceTheReaderClosesIt()
+        {
+            var cacheFolder = NewCacheFolder();
+            var directory = Open(NewCatalog(nameof(ALocalCopyAReaderHasOpen_IsRemovedOnceTheReaderClosesIt)), cacheFolder);
+            using (var writer = NewWriter(directory))
+            {
+                AddDocuments(writer, 10);
+                writer.Commit();
+
+                // A reader on this commit keeps its files open while later commits retire them.
+                var reader = DirectoryReader.Open(directory);
+                writer.ForceMerge(1);
+                AddDocuments(writer, 10);
+                writer.Commit();
+                writer.ForceMerge(1);
+                writer.Commit();
+                reader.Dispose();
+
+                // The next commit deletes, or retries deleting, what could not go before.
+                AddDocuments(writer, 10);
+                writer.Commit();
+            }
+
+            var inStorage = directory.ListAll().ToHashSet(StringComparer.Ordinal);
+            var orphans = CachedFiles(cacheFolder).Where(f => !inStorage.Contains(f)).ToArray();
+            Assert.AreEqual(0, orphans.Length, "Cached but deleted: " + string.Join(", ", orphans));
+        }
+
         [TestMethod]
         public void FileLocks_AreScopedToTheCache_NotTheFileName()
         {
